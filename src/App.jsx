@@ -1,0 +1,2947 @@
+import { Component, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft, ArrowRight, BarChart3, Check, CheckCircle2, ClipboardCheck, Menu,
+  Eye, EyeOff, ImagePlus, UploadCloud, Moon, Save, Sun, Target, UserRound, X, Zap,
+  CalendarDays, Flag, Plus, Trash2, LayoutDashboard, ListChecks, Clock3, BookOpen, Flame, Trophy, TrendingUp, PieChart, Sparkles, ChevronRight, PanelLeftClose, PanelLeftOpen, Award, Timer, HelpCircle, Bell, ShieldCheck, Users, Send, Search, CheckCheck, Megaphone, UserCheck, ChevronDown, Info, PenLine, LockKeyhole, Cookie, Scale, Heart, ClipboardList, LogOut, WalletCards, Receipt, CircleDollarSign, Landmark, BriefcaseBusiness, TrendingDown, Percent, RotateCcw, Medal
+} from "lucide-react";
+import { supabase } from "./supabaseClient";
+
+const features = [
+  { icon: ClipboardCheck, title: "Smart To-Do", text: "Plan the work that matters and move completed tasks out of the way." },
+  { icon: BarChart3, title: "Daily & Weekly Progress", text: "See exactly how consistently you are moving toward your study goals." },
+  { icon: CheckCircle2, title: "Study Records", text: "Track lectures, questions, pages, exercise and your daily score." },
+  { icon: Target, title: "Goals", text: "Turn bigger ambitions into measurable targets you can actually follow." },
+  { icon: Zap, title: "Streaks", text: "Build momentum and keep your discipline visible day after day." },
+  { icon: BarChart3, title: "Analytics", text: "Understand your strongest days, weak spots and long-term improvement." }
+];
+
+class taskenErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, message: "" };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, message: error?.message || "Something unexpected happened." };
+  }
+  componentDidCatch(error) {
+    console.error("TRACKEN runtime error:", error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="runtime-error-screen">
+          <div className="runtime-error-card">
+            <div className="runtime-error-mark">T<span>.</span></div>
+            <span className="card-kicker">TRACKEN RECOVERY</span>
+            <h1>We hit an unexpected problem.</h1>
+            <p>Your study data is safely stored in Supabase. Refresh the page and try again.</p>
+            <details><summary>Technical details</summary><code>{this.state.message}</code></details>
+            <button className="primary-cta" onClick={() => window.location.reload()}>Refresh TRACKEN <ArrowRight size={17} /></button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function friendlyAuthError(message) {
+  const text = String(message || "").toLowerCase();
+  if (text.includes("invalid login credentials")) return "The email or password is incorrect.";
+  if (text.includes("email not confirmed")) return "Please confirm your email before logging in.";
+  if (text.includes("user already registered")) return "An account with this email already exists. Try logging in.";
+  if (text.includes("password should be at least")) return "Your password must be at least 6 characters.";
+  if (text.includes("rate limit")) return "Too many attempts. Please wait a moment and try again.";
+  return message || "Something went wrong. Please try again.";
+}
+
+function getAuthRedirectUrl() {
+  const base = import.meta.env.BASE_URL || "/";
+  return new URL(base, window.location.origin).toString();
+}
+
+
+function useSyncedUserState(userId, column, initialValue, delay = 1500) {
+  const legacyKeys = {
+    habits: "tracken-habits", tracked_seconds: "tracken-time-today", time_running: "tracken-time-running",
+    focus_sessions: "tracken-focus-sessions", activity_log: "tracken-activity-log", money: "tracken-money",
+    investments: "tracken-investments", assets: "tracken-assets", liabilities: "tracken-liabilities",
+    monthly_budget: "tracken-monthly-budget", projects: "tracken-projects", task_meta: "tracken-task-meta",
+    daily_capacity: "tracken-daily-capacity", runway_start: "tracken-runway-start"
+  };
+  const getInitial = () => {
+    try {
+      const cached = localStorage.getItem(`tracken-state-${column}-${userId}`);
+      if (cached !== null) return JSON.parse(cached);
+      const legacy = legacyKeys[column] ? localStorage.getItem(legacyKeys[column]) : null;
+      if (legacy !== null) return JSON.parse(legacy);
+      return initialValue;
+    } catch { return initialValue; }
+  };
+  const [value, setValue] = useState(getInitial);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.from("user_app_state").select(column).eq("user_id", userId).maybeSingle();
+      if (cancelled) return;
+      if (!error && data && data[column] !== null && data[column] !== undefined) setValue(data[column]);
+      setHydrated(true);
+    })();
+    return () => { cancelled = true; };
+  }, [userId, column]);
+
+  useEffect(() => {
+    try { localStorage.setItem(`tracken-state-${column}-${userId}`, JSON.stringify(value)); } catch {}
+    if (!hydrated) return undefined;
+    const timer = setTimeout(() => {
+      supabase.from("user_app_state").upsert({ user_id: userId, [column]: value, updated_at: new Date().toISOString() }, { onConflict: "user_id" })
+        .then(({ error }) => { if (error) console.warn(`TRACKEN state sync (${column}):`, error.message); });
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [value, hydrated, userId, column, delay]);
+
+  return [value, setValue, hydrated];
+}
+
+function clearTrackenLocalCache(userId) {
+  const prefixes = [
+    "tracken-state-habits-", "tracken-state-tracked_seconds-", "tracken-state-time_running-",
+    "tracken-state-focus_sessions-", "tracken-state-activity_log-", "tracken-state-money-",
+    "tracken-state-investments-", "tracken-state-assets-", "tracken-state-liabilities-",
+    "tracken-state-monthly_budget-", "tracken-state-projects-", "tracken-state-task_meta-",
+    "tracken-state-daily_capacity-", "tracken-state-runway_start-"
+  ];
+  prefixes.forEach(prefix => localStorage.removeItem(`${prefix}${userId}`));
+  ["tracken-habits", "tracken-time-today", "tracken-time-running", "tracken-focus-sessions", "tracken-activity-log", "tracken-money", "tracken-investments", "tracken-assets", "tracken-liabilities", "tracken-monthly-budget", "tracken-projects", "tracken-task-meta", "tracken-daily-capacity", "tracken-runway-start"].forEach(k => localStorage.removeItem(k));
+  localStorage.removeItem(`tracken-avatar-${userId}`);
+}
+
+function normalizeArticleHtml(html) {
+  const source = String(html || "");
+  if (!source.includes("<")) return source.split(/\n\s*\n/).map(p => `<p>${p.replace(/\n/g, "<br />")}</p>`).join("");
+  if (typeof window === "undefined") return source;
+  const doc = new DOMParser().parseFromString(source, "text/html");
+  doc.querySelectorAll("script,style,iframe,object,embed,form").forEach(el => el.remove());
+  doc.querySelectorAll("*").forEach(el => {
+    [...el.attributes].forEach(attr => {
+      if (["src", "href", "alt", "title", "target", "rel", "width"].includes(attr.name)) return;
+      if (attr.name === "style" && el.tagName === "IMG") {
+        const match = String(attr.value || "").match(/(?:^|;)\s*width\s*:\s*(\d{1,3})%/i);
+        if (match) el.setAttribute("style", `width:${Math.min(100, Math.max(10, Number(match[1])))}%;height:auto;`);
+        else el.removeAttribute("style");
+        return;
+      }
+      el.removeAttribute(attr.name);
+    });
+    if (el.tagName === "A") {
+      const href = el.getAttribute("href") || "";
+      if (!/^https?:\/\//i.test(href)) el.removeAttribute("href");
+      else { el.setAttribute("target", "_blank"); el.setAttribute("rel", "noreferrer noopener"); }
+    }
+    if (el.tagName === "IMG") {
+      const src = el.getAttribute("src") || "";
+      if (!/^https?:\/\//i.test(src)) el.remove();
+    }
+  });
+  return doc.body.innerHTML;
+}
+
+function getTimeGreeting(date = new Date()) {
+  const hour = date.getHours();
+  if (hour < 5) return "Welcome back";
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  if (hour < 22) return "Good evening";
+  return "Good night";
+}
+
+function App() {
+  const [theme, setTheme] = useState(() => localStorage.getItem("tasken-theme") || "light");
+  const [session, setSession] = useState(null);
+  const [authView, setAuthView] = useState(null);
+  const [publicPage, setPublicPage] = useState("home");
+  const [selectedBlogPost, setSelectedBlogPost] = useState(null);
+  const [loadingSession, setLoadingSession] = useState(true);
+  const [recoveryMode, setRecoveryMode] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("tasken-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      if (error) {
+        const msg = String(error.message || "").toLowerCase();
+        if (msg.includes("issued in the future") || msg.includes("jwt")) {
+          supabase.auth.signOut({ scope: "local" }).catch(() => {});
+        }
+        setSession(null);
+      } else setSession(data.session);
+      setLoadingSession(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
+      if (event === "SIGNED_OUT") setRecoveryMode(false);
+      setSession(nextSession);
+      if (event === "TOKEN_REFRESHED" && !nextSession) setSession(null);
+    });
+
+    return () => { active = false; listener.subscription.unsubscribe(); };
+  }, []);
+
+  const toggleTheme = () => setTheme((current) => current === "light" ? "dark" : "light");
+
+  if (loadingSession) {
+    return <div className="loading-screen"><div className="loading-logo">TRACKEN<span>.</span></div></div>;
+  }
+
+  if (session && recoveryMode) {
+    return (
+      <PasswordRecoveryPage
+        theme={theme}
+        toggleTheme={toggleTheme}
+        onComplete={() => setRecoveryMode(false)}
+      />
+    );
+  }
+
+  if (session) {
+    return (
+      <taskenErrorBoundary>
+        <Dashboard session={session} theme={theme} toggleTheme={toggleTheme} onLogout={() => setPublicPage("home")} />
+      </taskenErrorBoundary>
+    );
+  }
+
+  if (authView) {
+    return (
+      <taskenErrorBoundary>
+      <AuthPage
+        mode={authView}
+        setMode={setAuthView}
+        theme={theme}
+        toggleTheme={toggleTheme}
+        onBack={() => setAuthView(null)}
+      />
+      </taskenErrorBoundary>
+    );
+  }
+
+  if (publicPage === "blog-post" && selectedBlogPost) {
+    return <taskenErrorBoundary><BlogPostPage post={selectedBlogPost} theme={theme} toggleTheme={toggleTheme} onBack={() => { setSelectedBlogPost(null); setPublicPage("blog"); }} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => setPublicPage("contact")} onNavigate={setPublicPage} /></taskenErrorBoundary>;
+  }
+
+  if (publicPage === "blog") {
+    return <taskenErrorBoundary><BlogPage theme={theme} toggleTheme={toggleTheme} onBack={() => setPublicPage("home")} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => setPublicPage("contact")} onNavigate={setPublicPage} onOpenPost={(post) => { setSelectedBlogPost(post); setPublicPage("blog-post"); }} /></taskenErrorBoundary>;
+  }
+
+  if (["about", "privacy", "terms", "cookies", "disclaimer", "advertising"].includes(publicPage)) {
+    return <taskenErrorBoundary><LegalPage page={publicPage} theme={theme} toggleTheme={toggleTheme} onBack={() => setPublicPage("home")} onLogin={() => setAuthView("login")} onNavigate={setPublicPage} /></taskenErrorBoundary>;
+  }
+
+  if (publicPage === "contact") {
+    return (
+      <taskenErrorBoundary>
+        <ContactPage
+          theme={theme}
+          toggleTheme={toggleTheme}
+          onBack={() => setPublicPage("home")}
+          onLogin={() => setAuthView("login")}
+          onBlog={() => setPublicPage("blog")}
+          onNavigate={setPublicPage}
+        />
+      </taskenErrorBoundary>
+    );
+  }
+
+  return (
+    <taskenErrorBoundary>
+      <LandingHome
+        theme={theme}
+        toggleTheme={toggleTheme}
+        onLogin={() => setAuthView("login")}
+        onRegister={() => setAuthView("register")}
+        onBlog={() => setPublicPage("blog")}
+        onContact={() => setPublicPage("contact")}
+        onNavigate={setPublicPage}
+      />
+    </taskenErrorBoundary>
+  );
+}
+
+
+function LandingHome({ theme, toggleTheme, onLogin, onRegister, onBlog, onContact, onNavigate }) {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const modules = [
+    { icon: ClipboardCheck, title: "Tasks", text: "Capture priorities, deadlines and the work that needs to happen next." },
+    { icon: BookOpen, title: "Study", text: "Record lectures, questions, pages, sessions and the evidence behind your learning." },
+    { icon: Flame, title: "Habits", text: "Build routines, track streaks and see whether consistency is becoming automatic." },
+    { icon: Timer, title: "Focus & Time", text: "Run deep-work sessions and understand where your hours actually go." },
+    { icon: Target, title: "Goals", text: "Turn ambitions into measurable targets, milestones and connected daily work." },
+    { icon: BriefcaseBusiness, title: "Productivity Engine", text: "Plan capacity, priorities, dependencies and the next best work to execute." },
+    { icon: WalletCards, title: "Money", text: "Track income, expenses, budgets and cash flow without leaving your personal system." },
+    { icon: TrendingUp, title: "Investments", text: "Keep holdings, invested capital and gain or loss visible in one portfolio view." },
+    { icon: Landmark, title: "Net Worth", text: "Bring assets and liabilities together to understand your financial position over time." },
+    { icon: BarChart3, title: "Analytics", text: "Turn your activity into trends, patterns and practical signals you can act on." },
+    { icon: Trophy, title: "Achievements", text: "Make meaningful progress visible through milestones and consistency wins." },
+    { icon: Sparkles, title: "Weekly Review", text: "Look back at what worked, what slipped and the clearest move for next week." }
+  ];
+  const pillars = [
+    ["01", "Track", "Capture the evidence of what you do — work, study, habits, focus and money."],
+    ["02", "Connect", "Let goals, tasks, time and results reinforce each other instead of living in separate apps."],
+    ["03", "Understand", "See patterns in your behavior and progress through a single personal operating picture."],
+    ["04", "Improve", "Use clear signals to decide what deserves attention today, this week and next."],
+  ];
+
+  return (
+    <div className="landing-v2">
+      <header className="landing-nav">
+        <button className="landing-brand" onClick={() => window.scrollTo({top:0, behavior:"smooth"})} aria-label="TRACKEN home">
+          TRACKEN<span>.</span><small>PERSONAL PROGRESS OS</small>
+        </button>
+        <nav className={`landing-nav-links ${mobileNavOpen ? "is-open" : ""}`} aria-label="Primary navigation">
+          <a href="#what-is-tracken" onClick={() => setMobileNavOpen(false)}>What is TRACKEN?</a>
+          <button onClick={() => { setMobileNavOpen(false); onBlog(); }}>Journal</button>
+          <button onClick={() => { setMobileNavOpen(false); onContact(); }}>Get in Touch</button>
+        </nav>
+        <div className="landing-actions">
+          <button className="landing-mobile-menu" onClick={() => setMobileNavOpen(v => !v)} aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"} aria-expanded={mobileNavOpen}>
+            {mobileNavOpen ? <X size={19} /> : <Menu size={19} />}
+          </button>
+          <button className="landing-theme" onClick={toggleTheme} aria-label="Toggle dark mode" title={theme === "light" ? "Dark mode" : "Light mode"}>
+            {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}
+          </button>
+          <button className="landing-login" onClick={onLogin}>Log in</button>
+          <button className="landing-signup" onClick={onRegister}>Get started <ArrowRight size={16} /></button>
+        </div>
+      </header>
+
+      <main>
+        <section className="landing-hero-v2">
+          <div className="landing-hero-copy">
+            <div className="landing-eyebrow"><span></span> ONE SYSTEM. EVERY KIND OF PROGRESS.</div>
+            <h1>Track your life.<br /><em>Understand your progress.</em></h1>
+            <p className="landing-hero-lead">TRACKEN is a personal progress operating system for the things that move your life forward — tasks, study, habits, focus, time, goals, money, investments and the patterns connecting them.</p>
+            <div className="landing-hero-actions">
+              <button className="landing-primary" onClick={onRegister}>Build your TRACKEN <ArrowRight size={18} /></button>
+              <a className="landing-secondary" href="#modules">Explore the system <ChevronRight size={17} /></a>
+            </div>
+            <div className="landing-proof-row">
+              <span><CheckCircle2 size={15} /> One place for your progress</span>
+              <span><CheckCircle2 size={15} /> Built for daily use</span>
+              <span><CheckCircle2 size={15} /> Your data, your system</span>
+            </div>
+          </div>
+          <div className="landing-command-card">
+            <div className="landing-command-glow"></div>
+            <div className="landing-command-top"><span>TRACKEN / OVERVIEW</span><span className="live-dot"><i></i> LIVE SYSTEM</span></div>
+            <div className="landing-command-title"><div><small>TODAY'S OPERATING PICTURE</small><h2>Everything<br /><em>in context.</em></h2></div><div className="landing-score-ring"><strong>84</strong><span>/100</span></div></div>
+            <div className="landing-command-grid">
+              <div><span>Tasks</span><strong>7 / 9</strong><small>execution</small></div>
+              <div><span>Study</span><strong>3h 42m</strong><small>today</small></div>
+              <div><span>Habits</span><strong>86%</strong><small>consistency</small></div>
+              <div><span>Focus</span><strong>2h 15m</strong><small>deep work</small></div>
+            </div>
+            <div className="landing-command-bottom">
+              <div><span>GOAL MOMENTUM</span><strong>Build something that compounds.</strong><div className="landing-line"><i></i></div><small>72% progress · 18 tasks connected</small></div>
+              <div className="landing-mini-bars"><i style={{height:"36%"}}></i><i style={{height:"58%"}}></i><i style={{height:"46%"}}></i><i style={{height:"76%"}}></i><i style={{height:"64%"}}></i><i style={{height:"88%"}}></i><i style={{height:"70%"}}></i></div>
+            </div>
+          </div>
+        </section>
+
+        <section className="landing-manifesto" id="what-is-tracken">
+          <div className="landing-section-kicker">WHAT IS TRACKEN?</div>
+          <div className="landing-manifesto-grid">
+            <h2>Not another<br /><em>to-do list.</em></h2>
+            <div><p>Most productivity tools help you record isolated pieces of your life. TRACKEN is designed to connect them.</p><p>You can track what you need to do, what you are learning, how consistently you show up, how you spend your time and money, and how all of that contributes to the goals you care about.</p><strong>Track what matters. See the pattern. Make the next move.</strong></div>
+          </div>
+        </section>
+
+        <section className="landing-pillars" id="how-it-works">
+          {pillars.map(([num, title, text]) => <article key={num}><span>{num}</span><h3>{title}</h3><p>{text}</p></article>)}
+        </section>
+
+        <section className="landing-modules" id="modules">
+          <div className="landing-section-head"><div><div className="landing-section-kicker">THE TRACKEN SYSTEM</div><h2>Everything you want<br /><em>to keep visible.</em></h2></div><p>Start with one tracker. Add the others as your system grows. TRACKEN is designed so every module can stand alone while still contributing to one bigger picture.</p></div>
+          <div className="landing-module-grid">
+            {modules.map(({icon: Icon, title, text}, index) => <article className="landing-module-card" key={title}><div className="landing-module-number">{String(index + 1).padStart(2,"0")}</div><div className="landing-module-icon"><Icon size={20}/></div><h3>{title}</h3><p>{text}</p><ChevronRight className="landing-module-arrow" size={18}/></article>)}
+          </div>
+        </section>
+
+        <section className="landing-insight-section">
+          <div className="landing-insight-card"><div><div className="landing-section-kicker">THE DIFFERENCE</div><h2>From tracking<br /><em>to understanding.</em></h2><p>A number is useful. A connected explanation is better. TRACKEN is built toward a system that can tell you what changed, why it matters and what deserves your attention next.</p><button className="landing-primary" onClick={onRegister}>Start tracking <ArrowRight size={17}/></button></div><div className="landing-insight-stack"><div><span>01</span><strong>Your activity</strong><small>Tasks · Study · Habits · Focus</small></div><div><span>02</span><strong>Your progress</strong><small>Goals · Milestones · Time · Results</small></div><div><span>03</span><strong>Your direction</strong><small>Analytics · Reviews · Next actions</small></div></div></div>
+        </section>
+
+        <section className="landing-final-cta">
+          <div className="landing-section-kicker">YOUR PROGRESS, YOUR SYSTEM</div>
+          <h2>Make every day<br /><em>count for something.</em></h2>
+          <p>Build a clearer picture of your work, your routines, your goals and your money — then use it to make better decisions.</p>
+          <div className="landing-hero-actions"><button className="landing-primary" onClick={onRegister}>Create your free system <ArrowRight size={18}/></button><button className="landing-secondary" onClick={onLogin}>I already have an account <ArrowRight size={17}/></button></div>
+        </section>
+      </main>
+
+      <footer className="landing-footer-v2">
+        <div><div className="landing-footer-brand">TRACKEN<span>.</span></div><small>PERSONAL PROGRESS OS</small><p>Track what matters. Understand your patterns. Build momentum every day.</p></div>
+        <div className="landing-footer-links"><button onClick={() => window.scrollTo({top:0, behavior:"smooth"})}>Home</button><a href="#modules">Features</a><button onClick={onBlog}>Journal</button><button onClick={onContact}>Get in Touch</button><button onClick={() => onNavigate("about")}>About</button></div>
+        <div className="landing-footer-policies"><button onClick={() => onNavigate("privacy")}>Privacy</button><button onClick={() => onNavigate("terms")}>Terms</button><button onClick={() => onNavigate("cookies")}>Cookies</button><button onClick={() => onNavigate("disclaimer")}>Disclaimer</button><button onClick={() => onNavigate("advertising")}>Advertising</button></div>
+        <div className="landing-footer-bottom"><span>TRACKEN by MMD</span><span>Made with DeepIntelligence</span></div>
+      </footer>
+    </div>
+  );
+}
+
+function DashboardPreview() {
+  const nav = [[LayoutDashboard,"Dashboard",true],[ListChecks,"Tasks"],[BookOpen,"Study records"],[Target,"Goals"],[CalendarDays,"Calendar"],[Trophy,"Achievements"],[TrendingUp,"Momentum"]];
+  const heat = Array.from({length: 35}, (_, i) => (i % 9 === 0 || i % 11 === 0) ? 3 : (i % 4 === 0 ? 2 : (i % 3 === 0 ? 1 : 0)));
+  return <div className="hero-visual hero-real-dashboard" aria-label="TRACKEN command center preview">
+    <div className="glow"></div>
+    <div className="dashboard-window dashboard-window-rich">
+      <div className="window-bar">
+        <div className="window-dots"><i></i><i></i><i></i></div>
+        <span>TRACKEN · COMMAND CENTER</span>
+        <div className="window-status"><span></span> Live study tracker</div>
+      </div>
+      <div className="real-dashboard-preview">
+        <aside className="preview-sidebar">
+          <div className="preview-brand">TRACKEN<span>.</span><small>COMMAND CENTER</small></div>
+          <div className="preview-nav">{nav.map(([Icon,label,active])=><div key={label} className={`preview-nav-item ${active?"active":""}`}><Icon size={12}/>{label}</div>)}</div>
+          <div className="preview-sidebar-bottom"><div className="preview-avatar">Y</div><span>Yash<small>Just building myself</small></span></div>
+        </aside>
+        <div className="preview-main">
+          <div className="preview-top">
+            <div><span className="mini-label">AUG 26 · TODAY</span><h3>Good morning, Yash.</h3><small className="preview-subline">Plan clearly. Work consistently. See the progress.</small></div>
+            <div className="preview-actions"><span><Flame size={12}/> 12 days</span><b>Y</b></div>
+          </div>
+          <div className="preview-metrics preview-metrics-five">
+            <div><span>Tasks today</span><strong>7/9</strong><small>78% complete</small></div>
+            <div><span>Study time</span><strong>4h 20m</strong><small>+42m this week</small></div>
+            <div><span>Questions</span><strong>125</strong><small>+18 today</small></div>
+            <div><span>Streak</span><strong>12 days</strong><small>Best 18 days</small></div>
+            <div className="preview-accent-card"><span>Daily score</span><strong>82%</strong><small>Excellent momentum</small></div>
+          </div>
+          <div className="preview-content-grid preview-main-grid">
+            <div className="preview-real-panel preview-task-panel">
+              <div className="preview-panel-head"><span>Today's tasks</span><b>+ Add task</b></div>
+              {["Complete algebra lecture","50 reasoning questions","Read 20 pages","Revise formulas","Review yesterday's notes"].map((task,i)=><div className={`preview-real-task ${i===0?"done":""}`} key={task}><i>{i===0?"✓":""}</i><span>{task}<small>{["Math · 60 min","Aptitude · 45 min","Physics · 30 min","Chemistry · 25 min","Revision · 20 min"][i]}</small></span>{i===0&&<b>Done</b>}</div>)}
+            </div>
+            <div className="preview-real-panel preview-progress-real">
+              <div className="preview-panel-head"><span>Progress overview</span><BarChart3 size={14}/></div>
+              <div className="preview-ring"><div><strong>78%</strong><small>Today</small></div></div>
+              <div className="preview-progress-row"><span>Today</span><b>78%</b></div><div className="preview-line"><i style={{width:"78%"}}></i></div>
+              <div className="preview-progress-row"><span>This week</span><b>68%</b></div><div className="preview-line"><i style={{width:"68%"}}></i></div>
+              <div className="preview-legend"><span><i></i>Completed</span><span><i></i>Remaining</span></div>
+            </div>
+          </div>
+          <div className="preview-lower-grid preview-rich-lower">
+            <div className="preview-real-panel">
+              <div className="preview-panel-head"><span>Study rhythm</span><small>Last 7 days</small></div>
+              <div className="preview-bars">{[24,48,34,72,58,80,92].map((h,i)=><div key={i}><i style={{height:`${h}%`}}></i><span>{["M","T","W","T","F","S","S"][i]}</span></div>)}</div>
+            </div>
+            <div className="preview-real-panel preview-heatmap-panel">
+              <div className="preview-panel-head"><span>Activity heatmap</span><small>Consistency</small></div>
+              <div className="preview-heatmap">{heat.map((v,i)=><i key={i} className={`heat-${v}`}></i>)}</div>
+              <div className="preview-heat-legend"><span>Less</span><i className="heat-0"></i><i className="heat-1"></i><i className="heat-2"></i><i className="heat-3"></i><span>More</span></div>
+            </div>
+            <div className="preview-real-panel preview-goal">
+              <div className="preview-panel-head"><span>Goal momentum</span><b>View all</b></div>
+              <strong>BUILD 100 WEBSITE</strong><div className="preview-goal-line"><i style={{width:"43%"}}></i></div><small>43% · 1 task completed · 6 days left</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+function ContactPage({ theme, toggleTheme, onBack, onLogin, onBlog, onNavigate }) {
+  const [sent, setSent] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
+  const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+  const submit = (event) => { event.preventDefault(); setSent(true); };
+  return (
+    <div className="contact-page-shell">
+      <header className="topbar contact-topbar">
+        <button className="brand brand-button" onClick={onBack} aria-label="TRACKEN home">TRACKEN<span>.</span></button>
+        <nav className="nav-links" aria-label="Primary navigation">
+          <button onClick={onBack}>Features</button><button onClick={onBlog}>Blog</button><button className="nav-link-button active" type="button">Get in Touch</button>
+        </nav>
+        <div className="nav-actions"><button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode">{theme === "light" ? <Moon size={18} /> : <Sun size={18} />}<span>{theme === "light" ? "Dark mode" : "Light mode"}</span></button><button className="login-button" onClick={onLogin}>Login</button></div>
+      </header>
+      <main className="contact-page-main">
+        <section className="contact-page-hero contact-page-hero-premium">
+          <div className="contact-page-copy">
+            <div className="eyebrow"><span></span> Get in touch</div>
+            <h1>Let's make<br /><em>better study days.</em></h1>
+            <p>Have an idea, a question or feedback about TRACKEN? Tell us what would make your workflow more useful, focused or enjoyable.</p>
+            <div className="contact-promise">
+              <div><div className="contact-promise-icon"><CheckCircle2 size={18}/></div><span><strong>Real feedback matters.</strong> Useful ideas help shape the product.</span></div>
+              <div><div className="contact-promise-icon"><Zap size={18}/></div><span><strong>Built around students.</strong> Share the friction you want removed.</span></div>
+              <div><div className="contact-promise-icon"><Heart size={18}/></div><span><strong>Thoughtful replies.</strong> We aim to respond clearly and respectfully.</span></div>
+            </div>
+          </div>
+          <div className="contact-form-wrap">
+            <div className="contact-form-glow"></div>
+            <form className="contact-form-card contact-form-card-premium" onSubmit={submit}>
+              <div className="contact-form-head"><span className="card-kicker">SEND A MESSAGE</span><h2>What can we help with?</h2><p>Share as much detail as you'd like.</p></div>
+              {sent ? (
+                <div className="contact-success">
+                  <div className="contact-success-icon"><Check size={24}/></div><span className="card-kicker">MESSAGE READY</span><h3>Thanks for reaching out.</h3><p>Your message has been prepared successfully. We'll connect the live delivery channel before production launch.</p><button type="button" className="secondary-cta" onClick={() => { setSent(false); setForm({ name:"", email:"", subject:"", message:"" }); }}>Send another message</button>
+                </div>
+              ) : (
+                <>
+                  <div className="contact-form-grid"><label><span>Your name</span><input value={form.name} onChange={(e)=>update("name",e.target.value)} placeholder="Your name" required /></label><label><span>Email address</span><input type="email" value={form.email} onChange={(e)=>update("email",e.target.value)} placeholder="you@example.com" required /></label></div>
+                  <label><span>Subject</span><input value={form.subject} onChange={(e)=>update("subject",e.target.value)} placeholder="What would you like to share?" required /></label>
+                  <label><span>Message</span><textarea value={form.message} onChange={(e)=>update("message",e.target.value)} placeholder="Write your message here..." rows="7" required /></label>
+                  <button className="primary-cta contact-submit" type="submit">Send message <ArrowRight size={18}/></button>
+                </>
+              )}
+            </form>
+            <div className="contact-visual-card"><div className="contact-visual-orbit"><Send size={28}/></div><span>YOUR VOICE MATTERS</span><strong>Let's build something<br />better together.</strong><small>Clear ideas. Better tools. Stronger study days.</small></div>
+          </div>
+        </section>
+      </main>
+      <PublicFooter onNavigate={(page) => page === "home" ? onBack() : onNavigate?.(page)} />
+    </div>
+  );
+}
+
+function BlogPage({theme,toggleTheme,onBack,onLogin,onRegister,onContact,onNavigate,onOpenPost}) {
+  const [mobileNavOpen,setMobileNavOpen]=useState(false);
+  const [posts,setPosts]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [activeCategory,setActiveCategory]=useState("All");
+  const [galleryOpen,setGalleryOpen]=useState(false);
+  const [galleryImages,setGalleryImages]=useState([]);
+
+  useEffect(()=>{
+    let mounted=true;
+    (async()=>{
+      setLoading(true);
+      const [{data,error},{data:galleryData,error:galleryError}]=await Promise.all([
+        supabase.from("blog_posts").select("*").eq("published",true).order("published_at",{ascending:false}),
+        supabase.from("journal_gallery").select("*").order("created_at",{ascending:false})
+      ]);
+      if(mounted){
+        setPosts(!error && Array.isArray(data) ? data : []);
+        setGalleryImages(!galleryError && Array.isArray(galleryData) ? galleryData : []);
+        setLoading(false);
+      }
+    })();
+    return()=>{mounted=false};
+  },[]);
+
+  const categories=["All",...Array.from(new Set(posts.map(p=>p.category).filter(Boolean)))];
+  const visible=activeCategory==="All"?posts:posts.filter(p=>p.category===activeCategory);
+
+  return (
+    <div className="public-page-shell journal-page-shell">
+      <header className="landing-nav journal-nav">
+        <button className="landing-brand" onClick={onBack} aria-label="TRACKEN home">
+          TRACKEN<span>.</span><small>PERSONAL PROGRESS OS</small>
+        </button>
+        <nav className={`landing-nav-links ${mobileNavOpen ? "is-open" : ""}`} aria-label="Primary navigation">
+          <a href="#journal-intro" onClick={(e)=>{e.preventDefault();setMobileNavOpen(false);window.scrollTo({top:0,behavior:"smooth"});}}>What is TRACKEN?</a>
+          <button className="active" onClick={()=>{setMobileNavOpen(false);window.scrollTo({top:0,behavior:"smooth"})}}>Journal</button>
+          <button onClick={()=>{setMobileNavOpen(false);onContact()}}>Get in Touch</button>
+        </nav>
+        <div className="landing-actions">
+          <button className="landing-mobile-menu" onClick={()=>setMobileNavOpen(v=>!v)} aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"} aria-expanded={mobileNavOpen}>{mobileNavOpen ? <X size={19}/> : <Menu size={19}/>}</button>
+          <button className="landing-theme" onClick={toggleTheme} aria-label="Toggle dark mode" title={theme === "light" ? "Dark mode" : "Light mode"}>
+            {theme === "light" ? <Moon size={17}/> : <Sun size={17}/>}
+          </button>
+          <button className="landing-login" onClick={onLogin}>Log in</button>
+          <button className="landing-signup" onClick={onRegister}>Get started <ArrowRight size={16}/></button>
+        </div>
+      </header>
+
+      <main className="journal-main" id="journal-intro">
+        <section className="journal-hero-clean">
+          <div className="journal-hero-copy">
+            <span className="eyebrow"><span></span> TRACKEN JOURNAL</span>
+            <h1>Ideas, systems &amp;<br/><em>better days.</em></h1>
+            <p>A quiet place for practical writing on study, discipline, focus, planning and the systems that make progress easier to see.</p>
+          </div>
+          <div className="journal-hero-mark">
+            <BookOpen size={25}/>
+            <span>THE JOURNAL</span>
+            <strong>{posts.length}</strong>
+            <small>{posts.length===1 ? "published entry" : "published entries"}</small>
+          </div>
+        </section>
+
+        <section className="journal-gallery-entry">
+          <div><span className="card-kicker">VISUAL JOURNAL</span><h2>Gallery of TRACKEN</h2><p>Moments, product visuals and images shared directly from the TRACKEN studio.</p></div>
+          <button className="primary-cta" onClick={()=>setGalleryOpen(true)}><ImagePlus size={17}/> View Gallery <ArrowRight size={16}/></button>
+        </section>
+
+        {galleryOpen && <div className="journal-gallery-overlay" role="dialog" aria-modal="true" aria-label="Gallery of TRACKEN" onClick={()=>setGalleryOpen(false)}>
+          <div className="journal-gallery-modal" onClick={e=>e.stopPropagation()}>
+            <div className="journal-gallery-head"><div><span className="card-kicker">TRACKEN JOURNAL</span><h2>Gallery of TRACKEN</h2><p>{galleryImages.length} {galleryImages.length===1?"image":"images"} published</p></div><button className="icon-button" onClick={()=>setGalleryOpen(false)} aria-label="Close gallery"><X size={20}/></button></div>
+            {galleryImages.length ? <div className="journal-gallery-grid">{galleryImages.map(item=><figure key={item.id}><img src={item.image_url} alt={item.alt_text||item.caption||"TRACKEN gallery"}/>{item.caption&&<figcaption>{item.caption}</figcaption>}</figure>)}</div> : <div className="journal-gallery-empty"><ImagePlus size={28}/><h3>The gallery is ready.</h3><p>Images uploaded from Admin will appear here instantly.</p></div>}
+          </div>
+        </div>}
+
+        {posts.length>0 && <div className="journal-filter-row">{categories.map(c=><button key={c} className={activeCategory===c?"active":""} onClick={()=>setActiveCategory(c)}>{c}</button>)}</div>}
+
+        {loading ? (
+          <section className="journal-empty-state journal-loading-state"><div className="journal-empty-icon"><BookOpen size={23}/></div><span className="card-kicker">LOADING JOURNAL</span><h2>Preparing your latest entries.</h2><p>Just a moment.</p></section>
+        ) : visible.length===0 ? (
+          <section className="journal-empty-state">
+            <div className="journal-empty-icon"><PenLine size={23}/></div>
+            <span className="card-kicker">YOUR JOURNAL</span>
+            <h2>Your first entry starts here.</h2>
+            <p>No articles have been published yet. Write your first journal entry from the TRACKEN Admin portal and it will appear here automatically.</p>
+            <button className="primary-cta" onClick={onLogin}>Write a journal entry <ArrowRight size={16}/></button>
+          </section>
+        ) : (
+          <section className="journal-grid">
+            {visible.map((post,index)=><article className={`journal-card ${index===0?"featured":""}`} key={post.id||post.slug} role="button" tabIndex={0} onClick={()=>onOpenPost(post)} onKeyDown={(e)=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onOpenPost(post);}}}>
+              <div className="journal-card-art"><span>{String(index+1).padStart(2,"0")}</span><BookOpen size={28}/></div>
+              <div className="journal-card-content">
+                <div className="journal-meta"><span>{post.category||"Journal"}</span><time>{post.published_at?new Date(post.published_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):"Published"}</time></div>
+                <h2>{post.title}</h2>
+                <p>{post.excerpt}</p>
+                <div className="journal-card-footer"><span>{post.read_minutes||5} min read</span><ArrowRight size={16}/></div>
+              </div>
+            </article>)}
+          </section>
+        )}
+      </main>
+      <PublicFooter onNavigate={(page)=>{if(page==="home")onBack(); else onNavigate(page);}}/>
+    </div>
+  );
+}
+
+function BlogPostPage({post,theme,toggleTheme,onBack,onLogin,onRegister,onContact,onNavigate}) {
+  const articleHtml = normalizeArticleHtml(post?.content || "");
+  const published = post?.published_at ? new Date(post.published_at).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Published";
+  return (
+    <div className="public-page-shell journal-post-shell">
+      <header className="landing-nav journal-nav">
+        <button className="landing-brand" onClick={onBack} aria-label="TRACKEN home">
+          TRACKEN<span>.</span><small>PERSONAL PROGRESS OS</small>
+        </button>
+        <nav className="landing-nav-links" aria-label="Primary navigation">
+          <button onClick={()=>onNavigate("home")}>What is TRACKEN?</button>
+          <button className="active" onClick={onBack}>Journal</button>
+          <button onClick={onContact}>Get in Touch</button>
+        </nav>
+        <div className="landing-actions">
+          <button className="landing-theme" onClick={toggleTheme} aria-label="Toggle dark mode" title={theme === "light" ? "Dark mode" : "Light mode"}>{theme === "light" ? <Moon size={17}/> : <Sun size={17}/>}</button>
+          <button className="landing-login" onClick={onLogin}>Log in</button>
+          <button className="landing-signup" onClick={onRegister}>Get started <ArrowRight size={16}/></button>
+        </div>
+      </header>
+      <main className="journal-post-main">
+        <button className="journal-back-link" onClick={onBack}><ArrowLeft size={15}/> Back to Journal</button>
+        <article className="journal-post-article">
+          <header className="journal-post-header">
+            <div className="journal-meta"><span>{post?.category || "Journal"}</span><time>{published}</time></div>
+            <h1>{post?.title || "Journal entry"}</h1>
+            {post?.excerpt && <p className="journal-post-excerpt">{post.excerpt}</p>}
+            <div className="journal-post-meta"><span>{post?.read_minutes || 5} min read</span><span>TRACKEN JOURNAL</span></div>
+          </header>
+          <div className="journal-post-body" dangerouslySetInnerHTML={{__html: articleHtml}} />
+        </article>
+      </main>
+      <PublicFooter onNavigate={(page)=>{if(page==="home")onNavigate("home"); else onNavigate(page);}}/>
+    </div>
+  );
+}
+
+function LegalPage({page,theme,toggleTheme,onBack,onLogin,onNavigate}) {
+  const content={
+    about:{icon:Heart,kicker:"ABOUT TRACKEN",title:"A calmer way to build better study days.",intro:"TRACKEN is a focused student productivity platform built around tasks, study records, goals, streaks and measurable progress.",sections:[["Our approach","We believe study systems should reduce friction, not add another layer of complexity. TRACKEN brings the work, the record and the bigger picture into one command center."],["Built for consistency","The product is designed to help students turn daily effort into visible momentum through clear tasks, honest records and meaningful goals."],["Our promise","We aim to keep TRACKEN useful, transparent and respectful of the people who use it."]]},
+    privacy:{icon:LockKeyhole,kicker:"PRIVACY POLICY",title:"Your information deserves clarity.",intro:"This page explains, in plain language, how TRACKEN handles information used to provide the service.",sections:[["Information we collect","TRACKEN may collect account details, profile information, tasks, goals, study records and messages you choose to submit so the service can provide your requested features."],["How information is used","Information is used to authenticate your account, save your progress, provide dashboard features, communicate important service updates and improve reliability."],["Security","We use account authentication and access controls to protect stored data. No online service can promise absolute security, so please use a strong, unique password."],["Your choices","You can update profile information through TRACKEN and contact us if you have questions about your data or privacy."]]},
+    terms:{icon:Scale,kicker:"TERMS & CONDITIONS",title:"Use TRACKEN responsibly.",intro:"These terms describe the basic rules for using TRACKEN and its study-management features.",sections:[["Acceptable use","Use TRACKEN for lawful personal productivity and study planning. Do not attempt to disrupt the service, access another person's account or misuse administrative functionality."],["Your content","You remain responsible for information, messages and content you enter into TRACKEN. Keep your credentials private."],["Service changes","Features may evolve as TRACKEN develops. We may update, improve or retire features when necessary to maintain the service."],["No guarantee of outcomes","TRACKEN is a productivity tool. It can help you organize and measure effort, but academic or career outcomes depend on many factors outside the service."]]},
+    cookies:{icon:Cookie,kicker:"COOKIE POLICY",title:"A transparent approach to cookies.",intro:"TRACKEN may use browser storage and similar technologies to remember settings and keep the experience working smoothly.",sections:[["Essential storage","We may use local browser storage for preferences such as theme selection and interface state. These are used to make the product behave as expected."],["Authentication","Authentication and session handling are provided through our authentication infrastructure so you can remain securely signed in."],["Analytics and advertising","If analytics or advertising technologies are introduced, this policy will be updated with relevant information about their purpose and controls."],["Your control","You can manage cookies and browser storage through your browser settings. Disabling some storage may affect functionality."]]},
+    disclaimer:{icon:Info,kicker:"DISCLAIMER",title:"TRACKEN helps you track the work.",intro:"TRACKEN provides productivity and study-tracking tools. It does not provide professional academic, medical, legal or financial advice.",sections:[["Educational use","Study statistics, scores and insights are organizational tools and should not be treated as guarantees of exam performance or admissions outcomes."],["Third-party services","TRACKEN may rely on external infrastructure and services. Their availability can affect parts of the experience."],["Advertising disclosure","Where advertising is displayed, it may be provided by third-party advertising services. Sponsored content does not determine TRACKEN's independent product guidance."]]},
+    advertising:{icon:Megaphone,kicker:"ADVERTISING & ADSENSE",title:"A clear approach to advertising.",intro:"TRACKEN may use advertising to support the continued development and availability of the service. We aim to keep advertising clearly separated from product functionality and editorial content.",sections:[["Advertising on TRACKEN","If advertising is enabled, advertisements may be supplied by third-party advertising partners such as Google AdSense. The presence of an advertisement does not mean TRACKEN endorses every product or service shown."],["How advertising works","Third-party advertising services may use information such as browser context, device information or consent choices to deliver and measure advertisements, subject to the provider's policies and applicable controls."],["Editorial independence","TRACKEN's study guidance, product information and journal content are created independently of advertising placement. Advertisers do not control our product decisions or editorial direction."],["Your choices","Where required, TRACKEN will provide appropriate consent and privacy controls. You can also manage relevant advertising preferences through your browser, device and applicable advertising-provider controls."]]}
+  }[page]||{}; const Icon=content.icon||Info;
+  return <div className="public-page-shell legal-page-shell"><header className="topbar public-inner-topbar"><button className="brand brand-button" onClick={onBack}>TRACKEN<span>.</span></button><nav className="nav-links"><button onClick={onBack}>Features</button><button onClick={()=>onNavigate("blog")}>Blog</button><button onClick={()=>onNavigate("contact")}>Get in Touch</button></nav><div className="nav-actions"><button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode">{theme==="light"?<Moon size={18}/>:<Sun size={18}/>}<span>{theme==="light"?"Dark mode":"Light mode"}</span></button><button className="login-button" onClick={onLogin}>Login</button></div></header><main className="legal-main"><div className="legal-hero"><div className="legal-icon"><Icon size={24}/></div><div className="eyebrow"><span></span> {content.kicker}</div><h1>{content.title}</h1><p>{content.intro}</p></div><div className="legal-body">{content.sections.map(([h,t])=><section key={h}><h2>{h}</h2><p>{t}</p></section>)}</div></main><PublicFooter onNavigate={onNavigate}/></div>;
+}
+function PublicFooter({onNavigate}) { return <footer className="footer premium-footer public-footer"><div className="footer-brand-block"><div className="footer-brand">TRACKEN<span>.</span></div><div className="footer-byline">by MMD</div><p>© 2026 TRACKEN. Built for better study days.</p></div><div className="footer-links footer-policy-links"><button onClick={()=>onNavigate("about")}>About</button><button onClick={()=>onNavigate("privacy")}>Privacy Policy</button><button onClick={()=>onNavigate("terms")}>Terms &amp; Conditions</button><button onClick={()=>onNavigate("cookies")}>Cookie Policy</button><button onClick={()=>onNavigate("disclaimer")}>Disclaimer</button><button onClick={()=>onNavigate("advertising")}>Advertising</button></div><div className="footer-adsense-note"><ShieldCheck size={15}/><span>Privacy-first experience with clear advertising and content disclosures.</span></div></footer>; }
+
+function AuthPage({ mode, setMode, theme, toggleTheme, onBack }) {
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const register = async (e) => {
+    e.preventDefault();
+    setError(""); setMessage("");
+    if (!fullName.trim()) return setError("Please enter your name.");
+    if (password.length < 6) return setError("Password must be at least 6 characters.");
+    setBusy(true);
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        data: { full_name: fullName.trim() },
+        // Always return to the actual GitHub Pages base URL instead of
+        // a nested route that GitHub Pages would answer with 404.
+        emailRedirectTo: getAuthRedirectUrl()
+      }
+    });
+    setBusy(false);
+    if (error) return setError(friendlyAuthError(error.message));
+    if (!data.session) {
+      setMessage("Account created. Check your email to confirm your account, then log in.");
+      return;
+    }
+    setMessage("Account created successfully. Welcome to TRACKEN.");
+  };
+
+  const login = async (e) => {
+    e.preventDefault();
+    setError(""); setMessage("");
+    setBusy(true);
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    setBusy(false);
+    if (error) setError(friendlyAuthError(error.message));
+  };
+
+  const signInWithGoogle = async () => {
+    setError(""); setMessage("");
+    setBusy(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: getAuthRedirectUrl()
+      }
+    });
+    if (error) {
+      setBusy(false);
+      return setError(friendlyAuthError(error.message));
+    }
+    // Supabase redirects the browser to Google, so keep the button locked
+    // while the redirect is being initiated.
+  };
+
+  const resetPassword = async (e) => {
+    e.preventDefault();
+    setError(""); setMessage("");
+    if (!email.trim()) return setError("Enter your account email first.");
+    setBusy(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: getAuthRedirectUrl()
+    });
+    setBusy(false);
+    if (error) return setError(friendlyAuthError(error.message));
+    setMessage("Password reset instructions have been sent to your email.");
+  };
+
+  return (
+    <div className="auth-shell">
+      <div className="auth-top">
+        <button className="back-button" onClick={onBack}><ArrowLeft size={17} /> Back</button>
+        <a className="brand" href="#" onClick={onBack}>TRACKEN<span>.</span></a>
+        <button className="auth-theme-icon" onClick={toggleTheme} aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"} title={theme === "light" ? "Dark mode" : "Light mode"}>{theme === "light" ? <Moon size={19} strokeWidth={2} /> : <Sun size={19} strokeWidth={2} />}</button>
+      </div>
+
+      <div className="auth-layout">
+        <div className="auth-side">
+          <div className="eyebrow"><span></span> Your next chapter</div>
+          <h1>{mode === "register" ? <>Start your<br /><em>discipline journey.</em></> : <>Welcome<br /><em>back.</em></>}</h1>
+          <p>{mode === "register" ? "Create your personal TRACKEN space and turn every study day into visible progress." : "Your tasks, records, goals and progress are waiting for you."}</p>
+        </div>
+
+        <div className="auth-card">
+          <div className="auth-card-head">
+            <span className="mini-label">{mode === "register" ? "NEW CANDIDATE" : "RETURNING CANDIDATE"}</span>
+            <h2>{mode === "register" ? "Create your account" : "View your progress"}</h2>
+            <p>{mode === "register" ? "It only takes a minute to get started." : "Log in to continue your journey."}</p>
+          </div>
+
+          {mode !== "reset" && (
+            <>
+              <button type="button" className="google-auth-button" onClick={signInWithGoogle} disabled={busy} aria-label="Continue with Google">
+                <svg className="google-auth-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#4285F4" d="M21.35 12.27c0-.72-.06-1.42-.18-2.09H12v3.96h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.7 2.91-4.2 2.91-7.26Z"/>
+                  <path fill="#34A853" d="M12 21.73c2.63 0 4.84-.87 6.45-2.36l-3.14-2.45c-.87.58-1.98.92-3.31.92-2.54 0-4.7-1.72-5.47-4.03H3.29v2.53A9.74 9.74 0 0 0 12 21.73Z"/>
+                  <path fill="#FBBC05" d="M6.53 13.81A5.86 5.86 0 0 1 6.22 12c0-.63.11-1.24.31-1.81V7.66H3.29A9.74 9.74 0 0 0 2.27 12c0 1.57.38 3.06 1.02 4.34l3.24-2.53Z"/>
+                  <path fill="#EA4335" d="M12 6.16c1.43 0 2.71.49 3.72 1.46l2.79-2.79C16.84 3.25 14.63 2.27 12 2.27a9.74 9.74 0 0 0-8.71 5.39l3.24 2.53C7.3 7.88 9.46 6.16 12 6.16Z"/>
+                </svg>
+                <span>{mode === "register" ? "Continue with Google" : "Continue with Google"}</span>
+              </button>
+              <div className="auth-divider" aria-hidden="true"><span>or</span></div>
+            </>
+          )}
+
+          <form onSubmit={mode === "register" ? register : mode === "reset" ? resetPassword : login}>
+            {mode === "register" && (
+              <label>Full name<input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Your name" autoComplete="name" /></label>
+            )}
+            <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" required /></label>
+            {mode !== "reset" && <label>Password
+              <div className="password-wrap">
+                <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" autoComplete={mode === "register" ? "new-password" : "current-password"} required />
+                <button type="button" aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button>
+              </div>
+            </label>}
+
+            {mode === "reset" && <p className="auth-helper">We'll email you a secure link to choose a new password.</p>}
+            {error && <div className="auth-message error" role="alert" aria-live="polite">{error}</div>}
+            {message && <div className="auth-message success" role="status" aria-live="polite">{message}</div>}
+
+            <button className="primary-cta auth-submit" disabled={busy}>
+              {busy ? "Please wait..." : mode === "register" ? <>Start Your Journey <ArrowRight size={18} /></> : mode === "reset" ? <>Send Reset Link <ArrowRight size={18} /></> : <>Login <ArrowRight size={18} /></>}
+            </button>
+          </form>
+
+          {mode === "login" && <button className="forgot-password-link" onClick={() => { setError(""); setMessage(""); setMode("reset"); }}>Forgot your password?</button>}
+
+          <div className="auth-switch">
+            {mode === "register" ? "Already have an account?" : mode === "reset" ? "Remember your password?" : "New to TRACKEN?"}
+            <button onClick={() => { setError(""); setMessage(""); setMode(mode === "register" || mode === "reset" ? "login" : "register"); }}>
+              {mode === "register" || mode === "reset" ? "Login" : "Start your discipline journey"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+
+function PasswordRecoveryPage({ theme, toggleTheme, onComplete }) {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (password.length < 6) return setError("Password must be at least 6 characters.");
+    if (password !== confirm) return setError("Passwords do not match.");
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password });
+    setBusy(false);
+    if (error) return setError(friendlyAuthError(error.message));
+    setDone(true);
+    setTimeout(async () => {
+      await supabase.auth.signOut();
+      onComplete();
+    }, 1200);
+  };
+
+  return (
+    <div className="auth-shell">
+      <div className="auth-top">
+        <div></div>
+        <a className="brand" href="#" aria-label="TRACKEN">TRACKEN<span>.</span></a>
+        <button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode">{theme === "light" ? <Moon size={18} /> : <Sun size={18} />}<span>{theme === "light" ? "Dark mode" : "Light mode"}</span></button>
+      </div>
+      <div className="auth-layout">
+        <div className="auth-side">
+          <div className="eyebrow"><span></span> Account security</div>
+          <h1>Choose a new<br /><em>password.</em></h1>
+          <p>Keep your TRACKEN account protected with a password you can remember and trust.</p>
+        </div>
+        <div className="auth-card">
+          <div className="auth-card-head">
+            <span className="mini-label">SECURE RECOVERY</span>
+            <h2>Reset your password</h2>
+            <p>Choose a new password for your TRACKEN account.</p>
+          </div>
+          {done ? <div className="auth-message success" role="status">Password updated successfully. Returning you to login…</div> : (
+            <form onSubmit={submit}>
+              <label>New password
+                <div className="password-wrap">
+                  <input type={show ? "text" : "password"} value={password} onChange={(e)=>setPassword(e.target.value)} autoComplete="new-password" placeholder="At least 6 characters" required />
+                  <button type="button" onClick={()=>setShow(!show)} aria-label={show ? "Hide password" : "Show password"}>{show ? <EyeOff size={17}/> : <Eye size={17}/>}</button>
+                </div>
+              </label>
+              <label>Confirm password<input type="password" value={confirm} onChange={(e)=>setConfirm(e.target.value)} autoComplete="new-password" placeholder="Re-enter your password" required /></label>
+              {error && <div className="auth-message error" role="alert">{error}</div>}
+              <button className="primary-cta auth-submit" disabled={busy}>{busy ? "Updating…" : <>Update Password <ArrowRight size={18}/></>}</button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const PROFILE_OPTIONS = {
+  preparation: [
+    "Using TRACKEN to organize my studies",
+    "Preparing for an exam",
+    "Building a daily productivity system",
+    "Balancing study, work & life",
+    "Improving consistency and discipline",
+    "Exploring my next goal",
+    "Other"
+  ],
+  direction: [
+    "Finish more of what I start",
+    "Build a reliable study routine",
+    "Stay on top of my tasks",
+    "Make my goals measurable",
+    "Understand my progress with analytics",
+    "Build better habits",
+    "Manage my time and focus better",
+    "Keep my money and progress organized"
+  ],
+  motivation: [
+    "Seeing visible progress motivates me",
+    "I want a system that keeps me accountable",
+    "I want less chaos and more clarity",
+    "I want to build consistency",
+    "I want to understand where my time goes",
+    "I want my daily work to connect to bigger goals",
+    "I enjoy improving systems around me"
+  ],
+  studyTime: [
+    "Early morning", "Morning", "Afternoon", "Evening", "Late night", "It changes every day"
+  ],
+  challenge: [
+    "Starting tasks", "Staying focused", "Finishing what I start", "Managing too many priorities", "Staying consistent", "Knowing what to work on next", "Tracking my progress"
+  ],
+  methods: [
+    "Tasks & checklists", "Focus sessions", "Daily study records", "Habit tracking", "Goal tracking", "Time tracking", "Weekly reviews", "Analytics & insights"
+  ],
+  careers: [
+    "Technology & Software", "Medicine & Healthcare", "Law", "Finance & Business", "Science & Research", "Government & Public Service", "Design & Creativity", "Education", "Engineering", "Entrepreneurship", "I'm still exploring"
+  ],
+  values: [
+    "Consistency", "Growth", "Financial independence", "Meaningful work", "Work-life balance", "Recognition", "Making an impact", "Learning", "Freedom", "Stability"
+  ]
+};
+
+const emptyProfile = {
+  full_name: "",
+  avatar_url: "",
+  preparation_for: "",
+  preparation_other: "",
+  target: "",
+  direction_goal: "",
+  motivation: "",
+  best_study_time: "",
+  biggest_challenge: "",
+  study_methods: [],
+  career_interests: [],
+  career_values: [],
+  five_year_vision: "",
+  badge: null
+};
+
+function Dashboard({ session, theme, toggleTheme, onLogout }) {
+  const userId = session.user.id;
+  const name = session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || "there";
+  const today = new Date();
+  const toDateKey = (date) => {
+    const y = date.getFullYear(); const m = String(date.getMonth() + 1).padStart(2, "0"); const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+  const todayKey = toDateKey(today);
+  const [selectedDate, setSelectedDate] = useState(todayKey);
+  const [tasks, setTasks] = useState([]);
+  const [record, setRecord] = useState({ lectures_watched: 0, lecture_minutes: 0, questions_done: 0, pages_read: 0, exercise_done: false });
+  const [history, setHistory] = useState([]);
+  const [goals, setGoals] = useState([]);
+  const [profile, setProfile] = useState(emptyProfile);
+  const [newTask, setNewTask] = useState("");
+  const [newTaskGoal, setNewTaskGoal] = useState("");
+  const [showTaskInput, setShowTaskInput] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [savingTask, setSavingTask] = useState(false);
+  const [savingRecord, setSavingRecord] = useState(false);
+  const [error, setError] = useState("");
+  const [showProfile, setShowProfile] = useState(false);
+  const [showUpdates, setShowUpdates] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showWeeklyReview, setShowWeeklyReview] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [showTracker, setShowTracker] = useState(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("tasken-sidebar-collapsed") === "true");
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [timeGreeting, setTimeGreeting] = useState(() => getTimeGreeting());
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [unreadUpdates, setUnreadUpdates] = useState(0);
+  const [habits, setHabits] = useSyncedUserState(userId, "habits", []);
+  const [focusSeconds, setFocusSeconds] = useState(25 * 60);
+  const [focusRunning, setFocusRunning] = useState(false);
+  const [focusPreset, setFocusPreset] = useState(25);
+  const [trackedSeconds, setTrackedSeconds] = useSyncedUserState(userId, "tracked_seconds", 0, 5000);
+  const [timeRunning, setTimeRunning] = useSyncedUserState(userId, "time_running", false, 1500);
+  const [completedFocusSessions, setCompletedFocusSessions] = useSyncedUserState(userId, "focus_sessions", 0);
+  const [activityLog, setActivityLog] = useSyncedUserState(userId, "activity_log", [], 2000);
+
+  useEffect(() => { document.body.classList.toggle("tasken-mobile-sidebar-open", mobileSidebarOpen); return () => document.body.classList.remove("tasken-mobile-sidebar-open"); }, [mobileSidebarOpen]);
+  useEffect(() => { const openGoals = () => setShowTracker("goals"); window.addEventListener("tracken-open-goals", openGoals); return () => window.removeEventListener("tracken-open-goals", openGoals); }, []);
+  useEffect(() => { const t = setInterval(() => setTimeGreeting(getTimeGreeting()), 60000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    if (!focusRunning) return undefined;
+    const timer = setInterval(() => setFocusSeconds((v) => { if (v <= 1) { setFocusRunning(false); setCompletedFocusSessions((c) => c + 1); logActivity("focus_completed", `${focusPreset} minute focus session`, focusPreset); return focusPreset * 60; } return v - 1; }), 1000);
+    return () => clearInterval(timer);
+  }, [focusRunning, focusPreset]);
+  useEffect(() => {
+    if (!timeRunning) return undefined;
+    const timer = setInterval(() => setTrackedSeconds((v) => v + 1), 1000);
+    return () => clearInterval(timer);
+  }, [timeRunning]);
+
+  const fetchAll = async () => {
+    setError("");
+    const weekStart = new Date(today); weekStart.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6);
+    const [tasksRes, recordRes, historyRes, goalsRes, profileRes, adminRes, updatesRes, readsRes] = await Promise.all([
+      supabase.from("tasks").select("*").eq("user_id", userId).order("created_at", { ascending: true }),
+      supabase.from("daily_records").select("*").eq("user_id", userId).eq("record_date", selectedDate).maybeSingle(),
+      supabase.from("daily_records").select("*").eq("user_id", userId).order("record_date", { ascending: false }).limit(90),
+      supabase.from("goals").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
+      supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+      supabase.from("admin_users").select("user_id").eq("user_id", userId).maybeSingle(),
+      supabase.from("updates").select("id").or(`recipient_user_id.is.null,recipient_user_id.eq.${userId}`),
+      supabase.from("update_reads").select("update_id").eq("user_id", userId)
+    ]);
+    if (tasksRes.error) setError(tasksRes.error.message); else setTasks(tasksRes.data || []);
+    if (recordRes.error) setError(recordRes.error.message); else setRecord({ lectures_watched: recordRes.data?.lectures_watched || 0, lecture_minutes: recordRes.data?.lecture_minutes || 0, questions_done: recordRes.data?.questions_done || 0, pages_read: recordRes.data?.pages_read || 0, exercise_done: recordRes.data?.exercise_done || false });
+    if (!historyRes.error) setHistory(historyRes.data || []);
+    if (!goalsRes.error) setGoals(goalsRes.data || []);
+    if (!profileRes.error && profileRes.data) setProfile({ ...emptyProfile, ...profileRes.data, study_methods: profileRes.data.study_methods || [], career_interests: profileRes.data.career_interests || [], career_values: profileRes.data.career_values || [] });
+    setIsAdmin(Boolean(adminRes.data && !adminRes.error));
+    if (!updatesRes.error && !readsRes.error) { const read = new Set((readsRes.data || []).map((x) => x.update_id)); setUnreadUpdates((updatesRes.data || []).filter((x) => !read.has(x.id)).length); }
+    setLoading(false);
+  };
+  useEffect(() => { fetchAll(); }, [userId, selectedDate]);
+
+  const selectedTasks = tasks.filter((t) => t.task_date === selectedDate);
+  const todoTasks = selectedTasks.filter((t) => t.status !== "completed");
+  const completedTasks = selectedTasks.filter((t) => t.status === "completed");
+  const taskProgress = selectedTasks.length ? Math.round((completedTasks.length / selectedTasks.length) * 100) : 0;
+  const weeklyTasks = tasks.filter((t) => { const d = new Date(`${t.task_date}T12:00:00`); const n = new Date(today); const diff = Math.floor((n - d) / 86400000); return diff >= 0 && diff < 7; });
+  const weeklyTaskProgress = weeklyTasks.length ? Math.round((weeklyTasks.filter((t) => t.status === "completed").length / weeklyTasks.length) * 100) : 0;
+  const totalStudyMinutes = history.reduce((s, r) => s + Number(r.lecture_minutes || 0), 0);
+  const weeklyStudyMinutes = history.filter((r) => { const d = new Date(`${r.record_date}T12:00:00`); const diff = Math.floor((today - d) / 86400000); return diff >= 0 && diff < 7; }).reduce((s, r) => s + Number(r.lecture_minutes || 0), 0);
+  const activeGoals = goals.filter((g) => g.status === "active");
+  const topGoal = activeGoals[0];
+  const goalProgress = topGoal?.target_value > 0 ? Math.min(100, Math.round((Number(topGoal.current_value || 0) / Number(topGoal.target_value)) * 100)) : 0;
+  const studyScore = Math.min(100, Math.round((Math.min(record.lecture_minutes / 180, 1) * 45) + (Math.min(record.questions_done / 100, 1) * 25) + (record.exercise_done ? 15 : 0) + (Math.min(record.pages_read / 40, 1) * 15)));
+  const todayHabitKey = todayKey;
+  const habitDoneToday = (h) => Array.isArray(h.completedDates) ? h.completedDates.includes(todayHabitKey) : Boolean(h.done);
+  const activeHabitsToday = habits.filter(h => !h.startDate || !h.durationDays || (() => { const start = new Date(`${h.startDate}T12:00:00`); const d = new Date(`${todayHabitKey}T12:00:00`); const end = new Date(start); end.setDate(end.getDate() + Number(h.durationDays) - 1); return d >= start && d <= end; })());
+  const consistencyScore = activeHabitsToday.length ? Math.round((activeHabitsToday.filter(h => habitDoneToday(h)).length / activeHabitsToday.length) * 100) : 0;
+  const focusScore = Math.min(100, Math.round((trackedSeconds / 3600) * 100));
+  const goalScore = activeGoals.length ? goalProgress : 0;
+  const score = Math.round((taskProgress * 0.30) + (studyScore * 0.25) + (goalScore * 0.20) + (consistencyScore * 0.15) + (focusScore * 0.10));
+  const scoreLabel = score >= 85 ? "Exceptional momentum" : score >= 70 ? "Strong momentum" : score >= 50 ? "Building momentum" : "Start small, stay consistent";
+  const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(today); d.setDate(today.getDate() - (6 - i)); return d; });
+  const recordMap = Object.fromEntries(history.map((r) => [r.record_date, r]));
+  const formatTime = (seconds) => { const total=Math.max(0,Number(seconds)||0); return `${Math.floor(total / 3600)}h ${String(Math.floor((total % 3600) / 60)).padStart(2, "0")}m ${String(total % 60).padStart(2, "0")}s`; };
+  const formatFocus = (seconds) => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  const logActivity = (type, label, value=1) => setActivityLog((c) => [...c, { id: crypto.randomUUID(), type, label, value, at: new Date().toISOString() }].slice(-250));
+  const addTask = async () => { const title = newTask.trim(); if (!title || savingTask) return; setSavingTask(true); const { data, error: e } = await supabase.from("tasks").insert({ user_id: userId, title, task_date: selectedDate, status: "todo", priority: "medium", goal_id: newTaskGoal || null }).select().single(); if (e) setError(e.message); else { setTasks((c) => [...c, data]); logActivity("task_created", title); setNewTask(""); setNewTaskGoal(""); setShowTaskInput(false); } setSavingTask(false); };
+  const toggleTask = async (task) => {
+    const nextStatus = task.status === "completed" ? "todo" : "completed";
+    const previous = task.status;
+    const completedAt = nextStatus === "completed" ? new Date().toISOString() : null;
+    setTasks((current) => current.map((item) => item.id === task.id ? { ...item, status: nextStatus, completed_at: completedAt } : item));
+    if (nextStatus === "completed") logActivity("task_completed", task.title);
+    const { error: e } = await supabase.from("tasks").update({ status: nextStatus, completed_at: completedAt }).eq("id", task.id).eq("user_id", userId);
+    if (e) {
+      setTasks((current) => current.map((item) => item.id === task.id ? { ...item, status: previous, completed_at: task.completed_at || null } : item));
+      setError(e.message || "Task could not be updated.");
+    }
+  };
+  const deleteTask = async (task) => { const { error: e } = await supabase.from("tasks").delete().eq("id", task.id).eq("user_id", userId); if (e) setError(e.message); else setTasks((c) => c.filter((x) => x.id !== task.id)); };
+  const updateRecord = (field, value) => { const numeric = ["lectures_watched", "lecture_minutes", "questions_done", "pages_read"]; setRecord((c) => ({ ...c, [field]: numeric.includes(field) ? Math.max(0, Number(value) || 0) : value })); };
+  const dailyScore = Math.min(100, Math.round((Math.min(record.lectures_watched / 4, 1) * 20) + (Math.min(record.lecture_minutes / 180, 1) * 20) + (Math.min(record.questions_done / 150, 1) * 25) + (Math.min(record.pages_read / 50, 1) * 15) + (record.exercise_done ? 20 : 0)));
+  const saveRecord = async () => { if (savingRecord) return; setSavingRecord(true); const { data, error: e } = await supabase.from("daily_records").upsert({ user_id: userId, record_date: selectedDate, ...record, daily_score: dailyScore, updated_at: new Date().toISOString() }, { onConflict: "user_id,record_date" }).select().single(); if (e) setError(e.message); else { setHistory((c) => [data, ...c.filter((x) => x.record_date !== selectedDate)].slice(0, 90)); logActivity("study_logged", `Study · ${record.lecture_minutes || 0} min`, Number(record.lecture_minutes || 0)); } setSavingRecord(false); };
+  const toggleHabit = (id) => setHabits((c) => c.map((h) => { const dates = Array.isArray(h.completedDates) ? [...h.completedDates] : (h.done ? [todayHabitKey] : []); const done = dates.includes(todayHabitKey); const nextDates = done ? dates.filter(d => d !== todayHabitKey) : [...new Set([...dates, todayHabitKey])]; if (!done) logActivity("habit_completed", h.title); return h.id === id ? { ...h, completedDates: nextDates, done: !done } : h; }));
+  const addHabit = () => { const title = window.prompt("Habit name"); if (title?.trim()) setHabits((c) => [...c, { id: crypto.randomUUID(), title: title.trim(), startDate: todayHabitKey, durationDays: 30, completedDates: [] }]); };
+  const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const toggleSidebar = () => setSidebarCollapsed((c) => { const n = !c; localStorage.setItem("tasken-sidebar-collapsed", String(n)); return n; });
+  const handleLogout = async () => { setError(""); const { error: logoutError } = await supabase.auth.signOut(); if (logoutError) return setError(logoutError.message); onLogout?.(); };
+  if (showProfile) return <ProfilePage session={session} profile={profile} setProfile={setProfile} theme={theme} toggleTheme={toggleTheme} onBack={() => setShowProfile(false)} />;
+  if (showAnalytics) return <AnalyticsPage session={session} theme={theme} toggleTheme={toggleTheme} history={history} tasks={tasks} goals={goals} onBack={() => setShowAnalytics(false)} />;
+  if (showWeeklyReview) return <WeeklyReviewPage session={session} theme={theme} toggleTheme={toggleTheme} tasks={tasks} history={history} goals={goals} habits={habits} activityLog={activityLog} trackedSeconds={trackedSeconds} completedFocusSessions={completedFocusSessions} score={score} onBack={() => setShowWeeklyReview(false)} />;
+  if (showCalendar) return <CalendarHistoryPage session={session} theme={theme} toggleTheme={toggleTheme} onBack={() => setShowCalendar(false)} />;
+  if (showTracker) return <TrackerHubPage initialTab={showTracker} session={session} theme={theme} toggleTheme={toggleTheme} tasks={tasks} setTasks={setTasks} history={history} goals={goals} setGoals={setGoals} habits={habits} setHabits={setHabits} trackedSeconds={trackedSeconds} setTrackedSeconds={setTrackedSeconds} focusSeconds={focusSeconds} setFocusSeconds={setFocusSeconds} focusRunning={focusRunning} setFocusRunning={setFocusRunning} focusPreset={focusPreset} setFocusPreset={setFocusPreset} formatTime={formatTime} formatFocus={formatFocus} timeRunning={timeRunning} setTimeRunning={setTimeRunning} toggleTask={toggleTask} onBack={() => setShowTracker(null)} onTasks={scrollTo} />;
+  if (showUpdates) return <UpdatesPage session={session} theme={theme} toggleTheme={toggleTheme} onBack={() => setShowUpdates(false)} onUnreadChange={setUnreadUpdates} />;
+  if (showAdmin) return <AdminPage session={session} theme={theme} toggleTheme={toggleTheme} onBack={() => setShowAdmin(false)} />;
+
+  return (
+    <div className={`command-center tracken-command-center tasken-app-shell ${sidebarCollapsed ? "sidebar-is-collapsed" : ""} ${mobileSidebarOpen ? "mobile-sidebar-is-open" : ""}`}>
+      <aside className="tasken-sidebar tracken-sidebar">
+        <div className="sidebar-brand"><div className="sidebar-brand-copy"><div className="brand">TRACKEN<span>.</span></div><span>PERSONAL PROGRESS OS</span></div><button className="sidebar-collapse" onClick={toggleSidebar} aria-label="Toggle sidebar">{sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button></div>
+        <nav className="sidebar-nav">
+          <button className="sidebar-item active"><LayoutDashboard size={18} /><span className="sidebar-item-label">Overview</span></button>
+          <div className="sidebar-section-label">TRACK</div>
+          <button className="sidebar-item" onClick={() => setShowTracker("tasks")}><ListChecks size={18} /><span className="sidebar-item-label">Tasks</span><span className="sidebar-count">{todoTasks.length}</span></button>
+          <button className="sidebar-item" onClick={() => setShowTracker("goals")}><Target size={18} /><span className="sidebar-item-label">Goals</span></button>
+          <button className="sidebar-item" onClick={() => setShowTracker("habits")}><Flame size={18} /><span className="sidebar-item-label">Habits</span></button>
+          <button className="sidebar-item" onClick={() => setShowTracker("focus")}><Timer size={18} /><span className="sidebar-item-label">Focus</span></button>
+          <button className="sidebar-item" onClick={() => setShowTracker("productivity")}><BriefcaseBusiness size={18} /><span className="sidebar-item-label">Productivity Engine</span></button>
+          <div className="sidebar-section-label">MONEY</div>
+          <button className="sidebar-item" onClick={() => setShowTracker("money")}><WalletCards size={18} /><span className="sidebar-item-label">Cashflow</span></button>
+          <button className="sidebar-item" onClick={() => setShowTracker("investments")}><BriefcaseBusiness size={18} /><span className="sidebar-item-label">Investments</span></button>
+          <div className="sidebar-section-label">INSIGHTS</div>
+          <button className="sidebar-item" onClick={() => setShowAnalytics(true)}><TrendingUp size={18} /><span className="sidebar-item-label">Analytics</span></button>
+          <button className="sidebar-item" onClick={() => setShowWeeklyReview(true)}><ClipboardList size={18} /><span className="sidebar-item-label">Weekly Review</span></button>
+          <button className="sidebar-item" onClick={() => scrollTo("track-achievements")}><Trophy size={18} /><span className="sidebar-item-label">Achievements</span></button>
+          <div className="sidebar-section-label">SYSTEM</div>
+          <button className={`sidebar-item ${unreadUpdates ? "has-unread" : ""}`} onClick={() => setShowUpdates(true)}><Bell size={18} /><span className="sidebar-item-label">Updates</span>{unreadUpdates ? <span className="sidebar-count unread-count">{unreadUpdates}</span> : null}</button>
+          {isAdmin && <button className="sidebar-item" onClick={() => setShowAdmin(true)}><ShieldCheck size={18} /><span className="sidebar-item-label">Admin</span></button>}
+        </nav>
+        <div className="sidebar-spacer" /><div className="tracken-sidebar-score"><span>TRACKEN SCORE</span><strong>{score}</strong><small>{scoreLabel}</small></div><div className="tasken-sidebar-version">3.5.10 TRACKEN</div>
+      </aside>
+      <button className="mobile-sidebar-overlay" aria-label="Close navigation" onClick={() => setMobileSidebarOpen(false)}></button>
+      <main className="dashboard-main tasken-main tracken-main">
+        <header className="dashboard-topbar tracken-topbar"><div className="tracken-mobile-title"><button className="mobile-sidebar-toggle" onClick={() => setMobileSidebarOpen(true)}><PanelLeftOpen size={19} /></button><span>TRACKEN</span></div><div className="topbar-date">{today.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div><div className="topbar-actions"><button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode">{theme === "light" ? <Moon size={18} /> : <Sun size={18} />}<span>{theme === "light" ? "Dark mode" : "Light mode"}</span></button><button className="logout-button topbar-logout" onClick={handleLogout} aria-label="Log out" title="Log out"><LogOut size={17} /><span>Logout</span></button><button className="profile-pill" onClick={() => setShowProfile(true)}>{profile.avatar_url ? <img src={profile.avatar_url} alt="Profile" onError={(e) => { e.currentTarget.style.display="none"; }} /> : <span>{name.charAt(0).toUpperCase()}</span>}<b>{name.split(" ")[0]}</b>{profile.badge && <em className={`profile-pill-badge ${String(profile.badge).toLowerCase()}`}>{profile.badge}</em>}<ChevronDown size={15} /></button></div></header>
+        <div className="tracken-content">
+          {error && <div className="dashboard-error"><Info size={16} />{error}<button onClick={() => setError("")}>×</button></div>}
+          <section className="tracken-hero"><div><span className="eyebrow">{timeGreeting}, {name.split(" ")[0]} <Sparkles size={14} /></span><h1>Your progress, <em>in one place.</em></h1><p>Track what matters. Understand your patterns. Build momentum every day.</p></div><div className="hero-score"><div className="score-orbit" style={{"--score-progress": `${score}%`}}><strong>{score}</strong><span>/100</span></div><div className="hero-score-copy"><span>TRACKEN SCORE · LIVE</span><b>{scoreLabel}</b><small>Calculated from today's execution, study, goals, habits and focus.</small><div className="hero-score-meta"><span>Execution {taskProgress}%</span><span>Study {studyScore}%</span><span>Consistency {consistencyScore}%</span></div></div></div></section>
+          <section className="tracken-kpis"><div className="kpi-card"><span>Tasks today</span><strong>{completedTasks.length}<small> / {selectedTasks.length || 0}</small></strong><div className="kpi-progress"><i style={{width:`${taskProgress}%`}} /></div><small>{taskProgress}% complete</small></div><div className="kpi-card"><span>Study today</span><strong>{Math.floor(record.lecture_minutes/60)}<small>h {record.lecture_minutes%60}m</small></strong><small>{Math.floor(weeklyStudyMinutes/60)}h {weeklyStudyMinutes%60}m this week</small></div><div className="kpi-card"><span>Focus today</span><strong>{formatTime(trackedSeconds)}</strong><small>{timeRunning ? "Timer running now" : "Ready when you are"}</small></div><div className="kpi-card accent-kpi"><span>Goal progress</span><strong>{goalProgress}<small>%</small></strong><small>{topGoal ? topGoal.title : "Create your first goal"}</small></div></section>
+          <section className="tracken-command-strip">
+            <div className="command-glance-row">
+              <article className="command-score-card">
+                <div className="command-score-copy"><span className="card-kicker">TODAY AT A GLANCE</span><h2>Your operating picture.</h2><p>One clear view of the signals that move your TRACKEN Score today.</p></div>
+                <div className="command-score-value"><strong>{score}</strong><span>/100</span><small>{scoreLabel}</small></div>
+              </article>
+            </div>
+            <div className="command-signal-row">
+              <article className="command-signal-card"><span className="card-kicker">EXECUTION</span><strong>{taskProgress}%</strong><span>tasks complete today</span><div><i style={{width:`${taskProgress}%`}}/></div></article>
+              <article className="command-signal-card"><span className="card-kicker">CONSISTENCY</span><strong>{habits.length ? Math.round((activeHabitsToday.filter(h=>habitDoneToday(h)).length/activeHabitsToday.length)*100) : 0}%</strong><span>habits completed today</span><div><i style={{width:`${habits.length ? Math.round((activeHabitsToday.filter(h=>habitDoneToday(h)).length/activeHabitsToday.length)*100) : 0}%`}}/></div></article>
+              <article className="command-signal-card"><span className="card-kicker">FOCUS</span><strong>{completedFocusSessions}</strong><span>focus sessions completed</span><div><i style={{width:`${Math.min(100, completedFocusSessions*20)}%`}}/></div></article>
+            </div>
+          </section>
+          <section className="tracken-grid-main">
+            <article className="tracken-panel task-panel" id="track-tasks"><div className="panel-heading"><div><span className="card-kicker">TODAY · {selectedDate}</span><h2>Priority queue</h2></div><button className="primary-small" onClick={() => setShowTaskInput((v)=>!v)}><Plus size={16}/> Add task</button></div>{showTaskInput && <div className="tracken-add-task"><input autoFocus value={newTask} onChange={(e)=>setNewTask(e.target.value)} onKeyDown={(e)=>e.key === "Enter" && addTask()} placeholder="What matters next?"/><select value={newTaskGoal} onChange={(e)=>setNewTaskGoal(e.target.value)}><option value="">No goal</option>{activeGoals.map(g=><option key={g.id} value={g.id}>{g.title}</option>)}</select><button onClick={addTask}>{savingTask ? "…" : "Add"}</button></div>}<div className="tracken-task-list">{todoTasks.slice(0,6).map((task)=><div className="tracken-task" key={task.id}><button className={`tracken-check priority-${task.priority}`} onClick={()=>toggleTask(task)}></button><div><b>{task.title}</b><small>{task.goal_id ? "Linked to goal" : "Today"}</small></div><button className="task-delete" onClick={()=>deleteTask(task)}>×</button></div>)}{!loading && todoTasks.length===0 && <div className="tracken-empty"><CheckCircle2 size={22}/><b>Clear runway.</b><span>Everything planned for today is done.</span></div>}</div><div className="panel-footer"><span>{todoTasks.length} remaining</span><button onClick={()=>scrollTo("track-tasks")}>View all <ChevronRight size={14}/></button></div></article>
+            <article className="tracken-panel score-panel"><div className="panel-heading"><div><span className="card-kicker">PERSONAL ANALYTICS</span><h2>Momentum</h2></div><TrendingUp size={19}/></div><div className="momentum-chart">{days.map((d,i)=>{const r=recordMap[toDateKey(d)]; const h=Math.max(8, Math.min(100, Number(r?.daily_score||0))); return <div className="momentum-bar" key={i}><i style={{height:`${h}%`}}/><span>{d.toLocaleDateString("en-US",{weekday:"short"}).slice(0,1)}</span></div>})}</div><div className="momentum-summary"><strong>{weeklyTaskProgress}%</strong><span>weekly task completion</span><b>{weeklyStudyMinutes ? `${Math.floor(weeklyStudyMinutes/60)}h ${weeklyStudyMinutes%60}m` : "0h"}</b><span>study this week</span></div></article>
+          </section>
+          <section className="tracken-intelligence-grid">
+            <article className="tracken-panel next-action-panel">
+              <div className="panel-heading"><div><span className="card-kicker">NEXT BEST ACTION</span><h2>What should move next?</h2></div><Sparkles size={19}/></div>
+              {(() => {
+                const nextTask = todoTasks[0];
+                const studyNeed = record.lecture_minutes < 60 || record.questions_done < 25;
+                const habitNeed = activeHabitsToday.length > 0 && activeHabitsToday.some(h=>!habitDoneToday(h));
+                let title = nextTask?.title || (studyNeed ? "Log a focused study block" : habitNeed ? `Complete ${activeHabitsToday.find(h=>!habitDoneToday(h))?.title}` : "Protect your momentum");
+                let meta = nextTask ? `${nextTask.priority || "medium"} priority · task` : studyNeed ? "Study engine · build today's evidence" : habitNeed ? "Consistency engine · keep the chain alive" : "You're on track · choose one meaningful action";
+                return <div className="next-action-body"><div className="next-action-icon"><Zap size={22}/></div><div><strong>{title}</strong><p>{meta}</p></div><button className="primary-small" onClick={()=> nextTask ? scrollTo("track-tasks") : studyNeed ? scrollTo("track-study") : scrollTo("track-habits")}>Open <ArrowRight size={15}/></button></div>;
+              })()}
+            </article>
+            <article className="tracken-panel score-breakdown-panel">
+              <div className="panel-heading"><div><span className="card-kicker">SCORE BREAKDOWN</span><h2>Why your score is {score}.</h2></div><BarChart3 size={19}/></div>
+              <div className="score-breakdown-list">
+                <div><span><b>Execution</b><small>Tasks completed</small></span><strong>{taskProgress}</strong><i><em style={{width:`${taskProgress}%`}}/></i></div>
+                <div><span><b>Study</b><small>Daily study output</small></span><strong>{studyScore}</strong><i><em style={{width:`${studyScore}%`}}/></i></div>
+                <div><span><b>Goals</b><small>Top goal progress</small></span><strong>{goalProgress}</strong><i><em style={{width:`${goalProgress}%`}}/></i></div>
+                <div><span><b>Consistency</b><small>Habits completed</small></span><strong>{habits.length ? Math.round((activeHabitsToday.filter(h=>habitDoneToday(h)).length/activeHabitsToday.length)*100) : 0}</strong><i><em style={{width:`${habits.length ? Math.round((activeHabitsToday.filter(h=>habitDoneToday(h)).length/activeHabitsToday.length)*100) : 0}%`}}/></i></div>
+              </div>
+            </article>
+          </section>
+          <section className="tracken-grid-three">
+            <article className="tracken-panel" id="track-habits"><div className="panel-heading"><div><span className="card-kicker">CONSISTENCY</span><h2>Habits</h2></div><button className="ghost-small" onClick={()=>setShowTracker("habits")}><Plus size={15}/> New</button></div><div className="habit-list">{habits.length ? habits.map(h=><button className={`habit-row ${habitDoneToday(h)?"done":""}`} key={h.id} onClick={()=>toggleHabit(h.id)}><span className="habit-dot">{habitDoneToday(h)?<Check size={13}/>:null}</span><b>{h.title}</b><small>{habitDoneToday(h)?"Completed today":"Open today"}</small></button>) : <div className="tracken-empty"><Flame size={20}/><b>Build your first streak.</b><span>Add a habit you want to make automatic.</span></div>}</div></article>
+            <article className="tracken-panel" id="track-study"><div className="panel-heading"><div><span className="card-kicker">STUDY ENGINE</span><h2>Daily study</h2></div><span className="mini-score">{dailyScore}</span></div><div className="study-inputs"><label>Lectures<input type="number" min="0" value={record.lectures_watched} onChange={(e)=>updateRecord("lectures_watched",e.target.value)}/></label><label>Minutes<input type="number" min="0" value={record.lecture_minutes} onChange={(e)=>updateRecord("lecture_minutes",e.target.value)}/></label><label>Questions<input type="number" min="0" value={record.questions_done} onChange={(e)=>updateRecord("questions_done",e.target.value)}/></label><label>Pages<input type="number" min="0" value={record.pages_read} onChange={(e)=>updateRecord("pages_read",e.target.value)}/></label></div><label className={`exercise-toggle ${record.exercise_done?"done":""}`}><input type="checkbox" checked={record.exercise_done} onChange={(e)=>updateRecord("exercise_done",e.target.checked)}/><span>{record.exercise_done?<Check size={15}/>:null}</span>Exercise completed</label><button className="save-wide" onClick={saveRecord}>{savingRecord?"Saving…":"Save today's study"}<Save size={15}/></button></article>
+            <article className="tracken-panel" id="track-focus"><div className="panel-heading"><div><span className="card-kicker">FOCUS & TIME</span><h2>Deep work</h2></div><Timer size={19}/></div><div className="focus-clock">{formatFocus(focusSeconds)}</div><div className="focus-presets">{[25,50,90].map(p=><button className={focusPreset===p?"selected":""} key={p} onClick={()=>{setFocusPreset(p);setFocusSeconds(p*60);setFocusRunning(false)}}>{p}m</button>)}</div><div className="focus-actions"><button className="primary-small" onClick={()=>setFocusRunning(v=>!v)}>{focusRunning?"Pause":"Start focus"}</button><button className="ghost-small" onClick={()=>{setFocusRunning(false);setFocusSeconds(focusPreset*60)}}>Reset</button></div><div className="time-tracker"><div><span>TIME TRACKER</span><b>{formatTime(trackedSeconds)}</b></div><button className={timeRunning?"running":""} onClick={()=>setTimeRunning(v=>!v)}>{timeRunning?"Stop":"Start"}</button></div></article>
+          </section>
+          <section className="tracken-grid-main bottom-grid"><article className="tracken-panel goal-panel"><div className="panel-heading"><div><span className="card-kicker">DESTINATION</span><h2>Goal momentum</h2></div><button className="ghost-small" onClick={()=>setShowTracker("goals")}>Manage <ChevronRight size={14}/></button></div>{topGoal?<><div className="goal-title-row"><div><b>{topGoal.title}</b><small>{topGoal.category||"Personal goal"}</small></div><strong>{goalProgress}%</strong></div><div className="big-progress"><i style={{width:`${goalProgress}%`}}/></div><div className="goal-meta"><span><b>{topGoal.current_value||0}</b> {topGoal.unit||"progress"}</span><span>{topGoal.target_date?`${Math.max(0,Math.ceil((new Date(`${topGoal.target_date}T12:00:00`)-today)/86400000))} days left`:"No deadline"}</span></div></>:<button className="goal-empty" onClick={()=>setShowTracker("goals")}><Target size={23}/><b>Give your effort a destination.</b><span>Create your first goal →</span></button>}</article><article className="tracken-panel insight-panel"><div className="panel-heading"><div><span className="card-kicker">TRACKEN INSIGHT</span><h2>One thing to improve</h2></div><Sparkles size={18}/></div><div className="insight-copy"><div className="insight-icon"><Zap size={19}/></div><div><b>{taskProgress < 70 ? "Close your task loop." : weeklyStudyMinutes < 300 ? "Protect a daily study block." : "Keep your current rhythm."}</b><p>{taskProgress < 70 ? "You have unfinished work today. Pick one high-impact task and finish it before adding more." : weeklyStudyMinutes < 300 ? "Your study engine has room to compound. A consistent 45–60 minute block can move the weekly curve." : "Your recent activity is balanced. Keep the system simple and repeat what is working."}</p></div></div><button className="insight-link" onClick={()=>setShowAnalytics(true)}>Open full analytics <ArrowRight size={15}/></button></article></section>
+          <section className="achievement-strip" id="track-achievements"><div><Trophy size={20}/><div><span>ACHIEVEMENTS</span><b>Make progress visible.</b></div></div><div className="achievement-items"><span><Flame size={15}/> {Math.max(1, history.length)} active days</span><span><Clock3 size={15}/> {Math.floor(totalStudyMinutes/60)}h total study</span><span><CheckCheck size={15}/> {tasks.filter(t=>t.status==="completed").length} tasks completed</span></div></section>
+          <footer className="dashboard-product-footer"><div><strong>TRACKEN <span>by MMD</span></strong><small>Made with DeepIntelligence</small></div><span>Personal Progress OS · 3.5.10</span></footer>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+
+function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks, setTasks, history, goals, setGoals, habits, setHabits, trackedSeconds, setTrackedSeconds, focusSeconds, setFocusSeconds, focusRunning, setFocusRunning, focusPreset, setFocusPreset, formatTime, formatFocus, timeRunning, setTimeRunning, toggleTask, onBack }) {
+  const [tab, setTab] = useState(initialTab);
+  const [money, setMoney] = useSyncedUserState(session.user.id, "money", []);
+  const [investments, setInvestments] = useSyncedUserState(session.user.id, "investments", []);
+  const [assets, setAssets] = useSyncedUserState(session.user.id, "assets", []);
+  const [liabilities, setLiabilities] = useSyncedUserState(session.user.id, "liabilities", []);
+  const [networthHydrated, setNetworthHydrated] = useState(false);
+  const [budget, setBudget] = useSyncedUserState(session.user.id, "monthly_budget", 0);
+  const [entry, setEntry] = useState({ type:"expense", title:"", amount:"", category:"General" });
+  const [holding, setHolding] = useState({ name:"", invested:"", value:"" });
+  const [habitText, setHabitText] = useState("");
+  const [habitForm, setHabitForm] = useState({ title:"", startDate:new Date().toISOString().slice(0,10), durationDays:30 });
+  const [showHabitForm, setShowHabitForm] = useState(false);
+  const [editingHabitId, setEditingHabitId] = useState(null);
+  const [taskQuickTitle, setTaskQuickTitle] = useState("");
+  const [taskQuickPriority, setTaskQuickPriority] = useState("medium");
+  const [taskQuickDate, setTaskQuickDate] = useState(new Date().toISOString().slice(0,10));
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [taskEdit, setTaskEdit] = useState({ title:"", priority:"medium", task_date:"" });
+  const [showStudySummary, setShowStudySummary] = useState(false);
+  const [editingMoneyId, setEditingMoneyId] = useState(null);
+  const [editingInvestmentId, setEditingInvestmentId] = useState(null);
+  const [moneyEdit, setMoneyEdit] = useState({type:"expense",title:"",amount:"",category:"General"});
+  const [investmentEdit, setInvestmentEdit] = useState({name:"",invested:"",value:""});
+  const [plannerDate, setPlannerDate] = useState(new Date().toISOString().slice(0,10));
+  const [movingTaskId, setMovingTaskId] = useState(null);
+  const [projects, setProjects] = useSyncedUserState(session.user.id, "projects", []);
+  const [taskMeta, setTaskMeta] = useSyncedUserState(session.user.id, "task_meta", {});
+  const [projectName, setProjectName] = useState("");
+  const [engineTaskTitle, setEngineTaskTitle] = useState("");
+  const [engineTaskDate, setEngineTaskDate] = useState(new Date().toISOString().slice(0,10));
+  const [engineTaskPriority, setEngineTaskPriority] = useState("high");
+  const [engineTaskDuration, setEngineTaskDuration] = useState(45);
+  const [engineTaskProject, setEngineTaskProject] = useState("");
+  const [engineTaskRecurrence, setEngineTaskRecurrence] = useState("none");
+  const [engineTaskDependency, setEngineTaskDependency] = useState("");
+  const [capacityHours, setCapacityHours] = useSyncedUserState(session.user.id, "daily_capacity", 6);
+  const [runwayDate, setRunwayDate] = useState(new Date().toISOString().slice(0,10));
+  const [runwayStartHour, setRunwayStartHour] = useSyncedUserState(session.user.id, "runway_start", 9);
+  useEffect(()=>{ if(tab==="goals") window.scrollTo({top:0,behavior:"smooth"}); },[tab]);
+  useEffect(()=>{
+    let cancelled=false;
+    (async()=>{
+      const {data,error}=await supabase.from("profiles").select("networth_snapshot").eq("id",session.user.id).maybeSingle();
+      if(!cancelled && !error && data?.networth_snapshot){
+        const snapshot=data.networth_snapshot || {};
+        if(Array.isArray(snapshot.assets)) setAssets(snapshot.assets);
+        if(Array.isArray(snapshot.liabilities)) setLiabilities(snapshot.liabilities);
+      }
+      if(!cancelled) setNetworthHydrated(true);
+    })();
+    return()=>{cancelled=true};
+  },[session.user.id]);
+  useEffect(()=>{
+    if(!networthHydrated) return;
+    const investmentValue=investments.reduce((sum,item)=>sum+Number(item.value||0),0);
+    const cashBalance=money.filter(item=>item.type==="income").reduce((sum,item)=>sum+Number(item.amount||0),0)-money.filter(item=>item.type==="expense").reduce((sum,item)=>sum+Number(item.amount||0),0);
+    const otherAssets=assets.reduce((sum,item)=>sum+Number(item.value||0),0);
+    const liabilitiesValue=liabilities.reduce((sum,item)=>sum+Number(item.value||0),0);
+    const snapshot={assets,liabilities,investments_value:investmentValue,cash_balance:cashBalance,networth_total:investmentValue+cashBalance+otherAssets-liabilitiesValue,updated_at:new Date().toISOString()};
+    supabase.from("profiles").upsert({id:session.user.id,networth_snapshot:snapshot},{onConflict:"id"}).then(({error})=>{ if(error) console.warn("Net worth sync:",error.message); });
+  },[networthHydrated,assets,liabilities,investments,money,session.user.id]);
+  // Timers are owned by Dashboard so switching tracker tabs cannot create duplicate intervals.
+  // This prevents the time tracker from jumping by two seconds.
+
+  const todayTasks=tasks.filter(t=>t.task_date===new Date().toISOString().slice(0,10));
+  const done=todayTasks.filter(t=>t.status==="completed").length;
+  const studyMinutes=history.slice(0,30).reduce((a,r)=>a+Number(r.lecture_minutes||0),0);
+  const totalIncome=money.filter(x=>x.type==="income").reduce((a,x)=>a+Number(x.amount),0);
+  const totalExpense=money.filter(x=>x.type==="expense").reduce((a,x)=>a+Number(x.amount),0);
+  const portfolio=investments.reduce((a,x)=>a+Number(x.value||0),0);
+  const invested=investments.reduce((a,x)=>a+Number(x.invested||0),0);
+  const moneyBalance=totalIncome-totalExpense;
+  const plannerTasks = tasks.filter(t => t.task_date === plannerDate);
+  const plannerDone = plannerTasks.filter(t => t.status === "completed").length;
+  const nextSevenDays = Array.from({length:7}, (_, i) => { const d = new Date(); d.setDate(d.getDate()+i); return d.toISOString().slice(0,10); });
+  const upcomingTasks = tasks.filter(t => nextSevenDays.includes(t.task_date)).sort((a,b) => String(a.task_date).localeCompare(String(b.task_date)));
+  const priorityOpen = plannerTasks.filter(t => t.status !== "completed" && ["high","urgent"].includes(String(t.priority || "").toLowerCase())).length;
+  const planningScore = plannerTasks.length ? Math.round((plannerDone / plannerTasks.length) * 70 + (priorityOpen === 0 ? 30 : Math.max(0, 30 - priorityOpen * 10))) : 70;
+  const getMeta = (id) => taskMeta[id] || { duration: 30, projectId: "", recurrence: "none", dependencyId: "" };
+  const isBlocked = (task) => { const dep = getMeta(task.id).dependencyId; return Boolean(dep && tasks.some(x => x.id === dep && x.status !== "completed")); };
+  const durationFor = (task) => Math.max(5, Number(getMeta(task.id).duration || 30));
+  const engineTasks = tasks.slice().sort((a,b) => {
+    const rank = { urgent: 4, high: 3, medium: 2, low: 1 };
+    const pa = rank[String(a.priority||"medium").toLowerCase()] || 2, pb = rank[String(b.priority||"medium").toLowerCase()] || 2;
+    if (a.status !== b.status) return a.status === "completed" ? 1 : -1;
+    if (pb !== pa) return pb - pa;
+    return String(a.task_date||"").localeCompare(String(b.task_date||""));
+  });
+  const engineToday = tasks.filter(t => t.task_date === new Date().toISOString().slice(0,10) && t.status !== "completed");
+  const enginePlannedMinutes = engineToday.reduce((sum,t)=>sum+durationFor(t),0);
+  const engineCapacityMinutes = Math.max(1, Number(capacityHours||6)*60);
+  const engineOverdue = tasks.filter(t => t.status !== "completed" && t.task_date && t.task_date < new Date().toISOString().slice(0,10)).length;
+  const studyActivityDates = new Set(history.filter(r => Number(r.daily_score||0)>0 || Number(r.lecture_minutes||0)>0 || Number(r.questions_done||0)>0 || Number(r.pages_read||0)>0).map(r=>r.record_date));
+  const currentStudyStreak = (() => { let run=0; const d=new Date(); while(studyActivityDates.has(d.toISOString().slice(0,10))){ run++; d.setDate(d.getDate()-1); } return run; })();
+  const bestStudyStreak = (() => { const sorted=[...studyActivityDates].sort(); let best=0,run=0,prev=null; for(const key of sorted){ const d=new Date(key+"T12:00:00"); if(prev){ const diff=Math.round((d-prev)/86400000); run=diff===1?run+1:1; } else run=1; best=Math.max(best,run); prev=d; } return best; })();
+  const streakLast7 = Array.from({length:7},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-(6-i)); return {key:d.toISOString().slice(0,10), label:d.toLocaleDateString("en-US",{weekday:"short"}).slice(0,2), active:studyActivityDates.has(d.toISOString().slice(0,10))}; });
+  const runwayOpenTasks = tasks.filter(t => t.task_date === runwayDate && t.status !== "completed").sort((a,b) => {
+    const rank={urgent:4,high:3,medium:2,low:1};
+    const pa=rank[String(a.priority||"medium").toLowerCase()]||2;
+    const pb=rank[String(b.priority||"medium").toLowerCase()]||2;
+    if(pb!==pa) return pb-pa;
+    return String(a.title||"").localeCompare(String(b.title||""));
+  });
+  const runwayCapacityMinutes = Math.max(60, Number(capacityHours||6)*60);
+  const runwayTasks = runwayOpenTasks.reduce((acc,t)=>{
+    const used=acc.reduce((sum,x)=>sum+durationFor(x),0);
+    return used+durationFor(t)<=runwayCapacityMinutes?[...acc,t]:acc;
+  },[]);
+  const runwayPlannedMinutes = runwayTasks.reduce((sum,t)=>sum+durationFor(t),0);
+  const runwayOverflowTasks = runwayOpenTasks.filter(t=>!runwayTasks.some(x=>x.id===t.id));
+  const formatRunwayTime = (minutes) => {
+    const total=Math.max(0,Number(minutes)||0);
+    const hour24=(runwayStartHour+Math.floor(total/60))%24;
+    const minute=total%60;
+    const suffix=hour24>=12?"PM":"AM";
+    const hour12=hour24%12||12;
+    return `${hour12}:${String(minute).padStart(2,"0")} ${suffix}`;
+  };
+  const completeEngineTask = async (task) => {
+    const {data,error:e}=await supabase.from("tasks").update({status:"completed"}).eq("id",task.id).select().single();
+    if(!e&&data)setTasks(c=>c.map(x=>x.id===task.id?data:x));
+  };
+  const engineProjects = projects.map(project => { const items = tasks.filter(t=>getMeta(t.id).projectId===project.id); const completed = items.filter(t=>t.status==="completed").length; return {...project, items, completed, progress: items.length ? Math.round(completed/items.length*100) : 0}; });
+  const createEngineTask = async () => {
+    const title = engineTaskTitle.trim(); if (!title) return;
+    const { data, error:e } = await supabase.from("tasks").insert({ user_id: session.user.id, title, task_date: engineTaskDate, status: "todo", priority: engineTaskPriority }).select().single();
+    if (!e && data) { setTasks(c=>[...c,data]); setTaskMeta(c=>({...c,[data.id]:{duration:Number(engineTaskDuration)||45,projectId:engineTaskProject,recurrence:engineTaskRecurrence,dependencyId:engineTaskDependency}})); setEngineTaskTitle(""); }
+  };
+  const addProject = () => { const title=projectName.trim(); if(!title)return; setProjects(c=>[{id:crypto.randomUUID(),name:title,createdAt:new Date().toISOString()},...c]); setProjectName(""); };
+  const updateTaskMeta = (task, patch) => setTaskMeta(c=>({...c,[task.id]:{duration:30,projectId:"",recurrence:"none",dependencyId:"",...(c[task.id]||{}),...patch}}));
+  const generateRecurring = async (task) => { const rec=getMeta(task.id).recurrence; if(rec==="none") return; const base=new Date(`${task.task_date}T12:00:00`); const days=rec==="daily"?1:rec==="weekly"?7:30; base.setDate(base.getDate()+days); const nextDate=base.toISOString().slice(0,10); const {data,error:e}=await supabase.from("tasks").insert({user_id:session.user.id,title:task.title,task_date:nextDate,status:"todo",priority:task.priority||"medium",goal_id:task.goal_id||null}).select().single(); if(!e&&data){setTasks(c=>[...c,data]);setTaskMeta(c=>({...c,[data.id]:{...getMeta(task.id)}}));} };
+  const moveTask = async (task, date) => { if (!date || date === task.task_date || movingTaskId === task.id) return; setMovingTaskId(task.id); const {data,error:e}=await supabase.from("tasks").update({task_date:date}).eq("id",task.id).select().single(); if (!e && data) setTasks(c=>c.map(x=>x.id===task.id?data:x)); setMovingTaskId(null); };
+  const tabs=[
+    ["runway",Clock3,"Today"],["productivity",BriefcaseBusiness,"Productivity Engine"],["tasks",ListChecks,"Tasks"],["goals",Target,"Goals"],["habits",Flame,"Habits"],["focus",Timer,"Focus"],
+    ["money",WalletCards,"Cashflow"],["investments",BriefcaseBusiness,"Investments"],["networth",CircleDollarSign,"Net Worth"]
+  ];
+  const visibleTabs = tabs.filter(([id]) => id !== "streak");
+  const addMoney=()=>{ if(!entry.title.trim()||Number(entry.amount)<=0)return; setMoney(m=>[{...entry,id:crypto.randomUUID(),amount:Number(entry.amount),date:new Date().toISOString()},...m]); setEntry(e=>({...e,title:"",amount:""})); };
+  const startEditMoney=(x)=>{setEditingMoneyId(x.id);setMoneyEdit({type:x.type,title:x.title||"",amount:String(x.amount||""),category:x.category||"General"});};
+  const saveMoneyEdit=()=>{if(!editingMoneyId||!moneyEdit.title.trim()||Number(moneyEdit.amount)<=0)return;setMoney(m=>m.map(x=>x.id===editingMoneyId?{...x,...moneyEdit,amount:Number(moneyEdit.amount)}:x));setEditingMoneyId(null);};
+  const deleteMoney=(id)=>{if(window.confirm("Delete this cashflow entry? This cannot be undone."))setMoney(m=>m.filter(x=>x.id!==id));};
+  const addAsset=()=>{ const name=prompt("Asset name"); const value=Number(prompt("Current value")); if(name&&value>0)setAssets(v=>[{id:crypto.randomUUID(),name,value},...v]); };
+  const addLiability=()=>{ const name=prompt("Liability name"); const value=Number(prompt("Outstanding amount")); if(name&&value>0)setLiabilities(v=>[{id:crypto.randomUUID(),name,value},...v]); };
+  const addInvestment=()=>{ if(!holding.name.trim()||Number(holding.value)<=0)return; setInvestments(v=>[{...holding,id:crypto.randomUUID(),invested:Number(holding.invested||0),value:Number(holding.value)},...v]); setHolding({name:"",invested:"",value:""}); };
+  const startEditInvestment=(x)=>{setEditingInvestmentId(x.id);setInvestmentEdit({name:x.name||"",invested:String(x.invested||""),value:String(x.value||"")});};
+  const saveInvestmentEdit=()=>{if(!editingInvestmentId||!investmentEdit.name.trim()||Number(investmentEdit.value)<=0)return;setInvestments(v=>v.map(x=>x.id===editingInvestmentId?{...x,...investmentEdit,invested:Number(investmentEdit.invested||0),value:Number(investmentEdit.value)}:x));setEditingInvestmentId(null);};
+  const deleteInvestment=(id)=>{if(window.confirm("Delete this investment holding? This cannot be undone."))setInvestments(v=>v.filter(x=>x.id!==id));};
+  const addQuickTask=async()=>{const title=taskQuickTitle.trim();if(!title)return;const {data,error:e}=await supabase.from("tasks").insert({user_id:session.user.id,title,task_date:taskQuickDate,status:"todo",priority:taskQuickPriority}).select().single();if(!e&&data){setTasks(c=>[...c,data]);setTaskQuickTitle("");}else if(e){window.alert(e.message)}};
+  const startEditTask=(task)=>{setEditingTaskId(task.id);setTaskEdit({title:task.title||"",priority:task.priority||"medium",task_date:task.task_date||new Date().toISOString().slice(0,10)});};
+  const cancelEditTask=()=>{setEditingTaskId(null);setTaskEdit({title:"",priority:"medium",task_date:""});};
+  const saveTaskEdit=async()=>{if(!editingTaskId||!taskEdit.title.trim()||!taskEdit.task_date)return;const {data,error:e}=await supabase.from("tasks").update({title:taskEdit.title.trim(),priority:taskEdit.priority,task_date:taskEdit.task_date}).eq("id",editingTaskId).eq("user_id",session.user.id).select().single();if(!e&&data){setTasks(c=>c.map(x=>x.id===data.id?data:x));cancelEditTask();}else if(e){window.alert(e.message)}};
+  const habitDayKey = (date) => { const d = typeof date === "string" ? new Date(`${date}T12:00:00`) : date; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+  const normalizedHabit = (h) => ({ ...h, startDate: h.startDate || habitDayKey(new Date()), durationDays: Math.max(1, Number(h.durationDays) || 30), completedDates: Array.isArray(h.completedDates) ? h.completedDates : (h.done ? [habitDayKey(new Date())] : []) });
+  const isHabitActiveOn = (h, dateKey) => { const n = normalizedHabit(h); const start = new Date(`${n.startDate}T12:00:00`); const day = new Date(`${dateKey}T12:00:00`); const end = new Date(start); end.setDate(end.getDate() + n.durationDays - 1); return day >= start && day <= end; };
+  const isHabitDoneOn = (h, dateKey) => normalizedHabit(h).completedDates.includes(dateKey);
+  const habitDays = (h) => { const n=normalizedHabit(h); const start=new Date(`${n.startDate}T12:00:00`); return Array.from({length:n.durationDays},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return {key:habitDayKey(d),label:d.toLocaleDateString("en-US",{weekday:"short"}).slice(0,2),day:d.getDate()};}); };
+  const toggleHabitDay = (habit, dateKey) => setHabits(current => current.map(h => { if(h.id!==habit.id || !isHabitActiveOn(h,dateKey)) return h; const n=normalizedHabit(h); const has=n.completedDates.includes(dateKey); const completedDates=has?n.completedDates.filter(d=>d!==dateKey):[...new Set([...n.completedDates,dateKey])]; return {...n,completedDates,done:completedDates.includes(habitDayKey(new Date()))}; }));
+  const openNewHabit = () => { setEditingHabitId(null); setHabitForm({title:"",startDate:habitDayKey(new Date()),durationDays:30}); setShowHabitForm(true); };
+  const openEditHabit = (habit) => { const n=normalizedHabit(habit); setEditingHabitId(habit.id); setHabitForm({title:n.title,startDate:n.startDate,durationDays:n.durationDays}); setShowHabitForm(true); };
+  const saveHabit = () => { const title=habitForm.title.trim(); const duration=Math.max(1,Math.min(365,Number(habitForm.durationDays)||0)); if(!title || !habitForm.startDate || !duration) return; setHabits(current => editingHabitId ? current.map(h => h.id===editingHabitId ? {...normalizedHabit(h),title,startDate:habitForm.startDate,durationDays:duration} : h) : [{id:crypto.randomUUID(),title,startDate:habitForm.startDate,durationDays:duration,completedDates:[]},...current]); setShowHabitForm(false); };
+  const deleteHabit = (habit) => { if(window.confirm(`Delete “${habit.title}”? Its habit history will also be removed.`)) setHabits(current=>current.filter(h=>h.id!==habit.id)); };
+  const title={runway:"Today’s Runway",productivity:"Productivity Engine",tasks:"Tasks",streak:"Streak",goals:"Goals that move you.",habits:"Habit System",focus:"Focus Mode",money:"Cashflow",budget:"Budget",investments:"Investments",networth:"Net Worth"}[tab];
+  const renderHabitCard = (raw) => {
+    const h = normalizedHabit(raw);
+    const days = habitDays(h);
+    const today = habitDayKey(new Date());
+    const activeToday = isHabitActiveOn(h, today);
+    const completedCount = h.completedDates.filter(d => isHabitActiveOn(h, d)).length;
+    return (
+      <article className="habit-system-card" key={h.id}>
+        <div className="habit-system-card-head">
+          <div><span className="card-kicker">{activeToday ? "ACTIVE NOW" : "DURATION COMPLETE"}</span><h3>{h.title}</h3><p>{new Date(`${h.startDate}T12:00:00`).toLocaleDateString("en-US", {month:"short",day:"numeric",year:"numeric"})} · {h.durationDays} days · {completedCount}/{h.durationDays} completed</p></div>
+          <div className="habit-row-actions"><button className="ghost-small" onClick={() => openEditHabit(h)}><PenLine size={14}/> Edit</button><button className="ghost-small danger-text" onClick={() => deleteHabit(h)}><Trash2 size={14}/> Delete</button></div>
+        </div>
+        <div className="habit-day-strip">
+          {days.map(day => {
+            const done = isHabitDoneOn(h, day.key);
+            return <button key={day.key} className={`${done ? "completed " : ""}${day.key === today ? "today" : ""}`} onClick={() => toggleHabitDay(h, day.key)} disabled={!isHabitActiveOn(h, day.key)} title={`${day.key} · ${done ? "Completed" : "Not completed"}`}><span>{done ? <Check size={13}/> : day.day}</span><small>{day.label}</small></button>;
+          })}
+        </div>
+      </article>
+    );
+  };
+  return <div className="tracker-page-shell">
+    <header className="tracker-page-topbar"><div className="tracker-page-brand"><button className="back-button" onClick={onBack}><ArrowLeft size={17}/></button><div><span>TRACKEN</span><small>PERSONAL PROGRESS OS</small></div></div><div className="tracker-page-actions"><button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode">{theme==="light"?<Moon size={18}/>:<Sun size={18}/>}<span>{theme==="light"?"Dark mode":"Light mode"}</span></button></div></header>
+    <div className="tracker-page-body"><aside className="tracker-subnav"><div className="tracker-subnav-kicker">TRACK CENTER</div>{visibleTabs.map(([id,Icon,label])=><button key={id} className={tab===id?"active":""} onClick={()=>setTab(id)}><Icon size={17}/><span>{label}</span>{id==="tasks"&&<small>{todayTasks.filter(t=>t.status!=="completed").length}</small>}</button>)}<div className="tracker-subnav-footer"><span>TRACKEN SCORE</span><strong>{Math.min(100,Math.round((done/Math.max(todayTasks.length,1))*60+(Math.min(studyMinutes/900,1)*40)))}</strong><small>Activity-based</small></div></aside>
+      <main className="tracker-workspace">{tab!=="goals"&&<div className="tracker-heading"><div><span className="card-kicker">TRACK CENTER</span><h1>{title}</h1><p>{tab==="money"?"Know where your money goes.":tab==="investments"?"Keep your portfolio visible.":tab==="networth"?"See your financial position at a glance.":tab==="budget"?"Set a clear boundary for your monthly spending.":tab==="productivity"?"Turn goals, tasks and time into an execution system.":tab==="streak"?"Your study consistency, summarized in one clear view.":"One system for the work that moves you forward."}</p></div><span className="tracker-date">{new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</span></div>}
+      {tab==="runway"&&<section className="runway-engine">
+        <div className="runway-hero">
+          <div className="runway-hero-copy">
+            <span className="eyebrow"><span></span> DAILY OPERATING SYSTEM · 3.5.10</span>
+            <h2>Your day, turned into a <em>clear runway.</em></h2>
+            <p>TRACKEN converts today's open work into a realistic sequence using priority, estimated duration and your available capacity. The goal is not to fill every minute — it is to finish the work that matters.</p>
+            <div className="runway-date-controls">
+              <button className="ghost-small" onClick={()=>{const d=new Date(runwayDate+"T12:00:00");d.setDate(d.getDate()-1);setRunwayDate(d.toISOString().slice(0,10));}}><ArrowLeft size={14}/> Previous</button>
+              <strong>{new Date(runwayDate+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</strong>
+              <button className="ghost-small" onClick={()=>setRunwayDate(new Date().toISOString().slice(0,10))}>Today</button>
+              <button className="ghost-small" onClick={()=>{const d=new Date(runwayDate+"T12:00:00");d.setDate(d.getDate()+1);setRunwayDate(d.toISOString().slice(0,10));}}>Next <ArrowRight size={14}/></button>
+            </div>
+          </div>
+          <div className="runway-command">
+            <span>RUNWAY HEALTH</span>
+            <strong>{runwayOverflowTasks.length?"TIGHT":"CLEAR"}</strong>
+            <small>{runwayTasks.length} selected · {Math.round(runwayPlannedMinutes/60*10)/10}h planned</small>
+            <div className="runway-health-meter"><i style={{width:`${Math.min(100,runwayPlannedMinutes/runwayCapacityMinutes*100)}%`}}/></div>
+            <b>{Math.max(0,Math.round((runwayCapacityMinutes-runwayPlannedMinutes)/60*10)/10)}h buffer</b>
+          </div>
+        </div>
+        <div className="runway-kpis">
+          <article><span>OPEN TODAY</span><strong>{runwayOpenTasks.length}</strong><small>unfinished tasks</small></article>
+          <article><span>PLANNED</span><strong>{Math.round(runwayPlannedMinutes/60*10)/10}h</strong><small>selected for your runway</small></article>
+          <article><span>CAPACITY</span><strong>{capacityHours}h</strong><small>your daily limit</small></article>
+          <article><span>OUTSIDE RUNWAY</span><strong className={runwayOverflowTasks.length?"negative":"positive"}>{runwayOverflowTasks.length}</strong><small>{runwayOverflowTasks.length?"needs rescheduling":"nothing pushed out"}</small></article>
+        </div>
+        <div className="runway-grid">
+          <article className="tracker-large-card">
+            <div className="panel-heading"><div><span className="card-kicker">TODAY'S RUNWAY</span><h2>Work in the order that matters.</h2></div><Sparkles size={20}/></div>
+            <div className="runway-settings"><label>Start time<select value={runwayStartHour} onChange={e=>setRunwayStartHour(Number(e.target.value))}>{[6,7,8,9,10,11,12,13,14,15,16,17,18].map(h=><option key={h} value={h}>{h%12||12}:00 {h>=12?"PM":"AM"}</option>)}</select></label><label>Capacity<input type="number" min="1" max="24" step="0.5" value={capacityHours} onChange={e=>setCapacityHours(Math.max(1,Number(e.target.value)||1))}/></label></div>
+            <div className="runway-timeline">
+              {runwayTasks.length?runwayTasks.map((t,i)=>{const offset=runwayTasks.slice(0,i).reduce((sum,x)=>sum+durationFor(x),0);const dur=durationFor(t);return <div className="runway-task-card" key={t.id}><div className="runway-time"><span>{formatRunwayTime(offset)}</span><i></i></div><div className="runway-task-body"><div><span className={`runway-priority ${String(t.priority||"medium").toLowerCase()}`}>{String(t.priority||"medium")}</span><small>{dur} min</small></div><b>{t.title}</b><p>{getMeta(t.id).projectId?projects.find(p=>p.id===getMeta(t.id).projectId)?.name||"Project":"Independent task"}</p></div><button className="runway-complete" onClick={()=>completeEngineTask(t)} title="Complete task"><Check size={15}/></button></div>}) : <div className="tracker-empty-big"><CheckCircle2 size={28}/><h3>Your runway is clear.</h3><p>No open tasks are scheduled for this day. Use the Productivity Engine to capture new work.</p></div>}
+            </div>
+          </article>
+          <aside className="runway-side-stack">
+            <article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">DAILY BRIEF</span><h2>What matters now.</h2></div><Zap size={19}/></div><div className="runway-brief-list"><div><span>FIRST PRIORITY</span><b>{runwayTasks[0]?.title||"Nothing urgent"}</b><small>{runwayTasks[0]?`${String(runwayTasks[0].priority||"medium")} · ${durationFor(runwayTasks[0])} min`:"You have room to plan."}</small></div><div><span>FOCUS WINDOW</span><b>{formatRunwayTime(0)} — {formatRunwayTime(Math.min(runwayPlannedMinutes,120))}</b><small>Protect the first meaningful block.</small></div><div><span>DECISION RULE</span><b>Finish before you add.</b><small>Keep a buffer for reality, interruptions and thinking.</small></div></div></article>
+            <article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">CAPACITY CHECK</span><h2>Don't overbook the day.</h2></div><Clock3 size={19}/></div><div className="runway-capacity-ring" style={{"--runway-pct":`${Math.min(100,runwayPlannedMinutes/runwayCapacityMinutes*100)}%`}}><div><strong>{Math.round(runwayPlannedMinutes/runwayCapacityMinutes*100)}%</strong><span>allocated</span></div></div><p className="tracker-copy">{runwayOverflowTasks.length?`You have ${runwayOverflowTasks.length} task${runwayOverflowTasks.length>1?"s":""} outside today's realistic capacity. Move lower-value work instead of extending the day.`:"Your selected work fits inside your stated capacity. Keep the remaining time as a deliberate buffer."}</p></article>
+          </aside>
+        </div>
+        {runwayOverflowTasks.length>0&&<article className="tracker-large-card runway-overflow"><div className="panel-heading"><div><span className="card-kicker">TRIAGE QUEUE</span><h2>These tasks need another plan.</h2></div><Bell size={19}/></div><div className="runway-overflow-list">{runwayOverflowTasks.map(t=><div key={t.id}><div><b>{t.title}</b><small>{String(t.priority||"medium")} · {durationFor(t)} min · {t.task_date}</small></div><button className="ghost-small" onClick={()=>setTab("planner")}>Reschedule <ArrowRight size={14}/></button></div>)}</div></article>}
+      </section>}
+      {tab==="productivity"&&<section className="productivity-engine">
+        <div className="productivity-hero">
+          <div><span className="eyebrow"><span></span> EXECUTION SYSTEM · 3.5.10</span><h2>Turn goals into <em>finished work.</em></h2><p>Projects, priorities, dependencies, recurring work and time capacity — one engine for deciding what deserves your attention.</p></div>
+          <div className="productivity-hero-score"><span>CAPACITY TODAY</span><strong>{Math.max(0,Math.round((engineCapacityMinutes-enginePlannedMinutes)/60*10)/10)}h</strong><small>{Math.round(enginePlannedMinutes/60*10)/10}h planned · {capacityHours}h capacity</small></div>
+        </div>
+        <article className="productivity-streak-card" onClick={()=>setShowStudySummary(true)} role="button" tabIndex="0" onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setShowStudySummary(true);}}>
+          <div className="streak-card-main"><div className="productivity-streak-mark"><Flame size={22}/></div><div><span className="card-kicker">STUDY STREAK</span><h3>{currentStudyStreak}<small> days</small></h3><p>{currentStudyStreak ? "Your consistency is building momentum." : "Start a study record today to begin your streak."}</p></div></div>
+          <div className="streak-week" aria-label="Last 7 days study activity">{streakLast7.map(day=><div key={day.key} className={day.active?"active":""}><span>{day.active?"✓":""}</span><small>{day.label}</small></div>)}</div>
+          <div className="streak-card-stat"><span>BEST</span><strong>{bestStudyStreak}d</strong></div><div className="streak-card-action"><span>View full study summary</span><ArrowRight size={18}/></div>
+        </article>
+        <div className="productivity-kpis"><article><span>OPEN WORK</span><strong>{tasks.filter(t=>t.status!=="completed").length}</strong><small>tasks in your system</small></article><article><span>TODAY'S LOAD</span><strong>{Math.min(999,Math.round(enginePlannedMinutes/60*10)/10)}h</strong><small>{Math.round(enginePlannedMinutes/engineCapacityMinutes*100)}% of capacity</small></article><article><span>OVERDUE</span><strong className={engineOverdue?"negative":"positive"}>{engineOverdue}</strong><small>{engineOverdue?"needs triage":"runway is clear"}</small></article><article><span>PROJECTS</span><strong>{projects.length}</strong><small>active workstreams</small></article></div>
+        <div className="productivity-grid">
+          <article className="tracker-large-card productivity-queue-card"><div className="panel-heading"><div><span className="card-kicker">SMART QUEUE</span><h2>Do this next.</h2></div><Sparkles size={20}/></div><p className="tracker-copy">Priority, due date and blockers shape this queue. Finish blocked work only after its prerequisite is complete.</p><div className="engine-queue">{engineTasks.filter(t=>t.status!=="completed").slice(0,8).map((t,i)=><div className={`engine-task-row ${isBlocked(t)?"blocked":""}`} key={t.id}><span className="engine-rank">{i+1}</span><div className="engine-task-main"><b>{t.title}</b><small>{String(t.priority||"medium").toUpperCase()} · {durationFor(t)} min · {t.task_date||"No date"}{isBlocked(t)?" · BLOCKED":""}</small></div><div className="engine-task-controls"><select value={getMeta(t.id).duration} onChange={e=>updateTaskMeta(t,{duration:Number(e.target.value)})}><option value="15">15m</option><option value="30">30m</option><option value="45">45m</option><option value="60">1h</option><option value="90">1h 30m</option><option value="120">2h</option></select><select value={getMeta(t.id).projectId} onChange={e=>updateTaskMeta(t,{projectId:e.target.value})}><option value="">No project</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select>{getMeta(t.id).recurrence!=="none"&&<button className="ghost-small" onClick={()=>generateRecurring(t)} title="Create next occurrence"><ArrowRight size={14}/></button>}</div></div>)}{!engineTasks.filter(t=>t.status!=="completed").length&&<div className="tracker-empty-big"><CheckCircle2 size={28}/><h3>Execution runway is clear.</h3><p>No open work needs your attention.</p></div>}</div></article>
+          <article className="tracker-large-card engine-capacity-card"><div className="panel-heading"><div><span className="card-kicker">TIME CAPACITY</span><h2>Don't overbook yourself.</h2></div><Clock3 size={20}/></div><label className="engine-capacity-input"><span>Daily capacity</span><div><input type="number" min="1" max="24" step="0.5" value={capacityHours} onChange={e=>setCapacityHours(Math.max(1,Number(e.target.value)||1))}/><b>hours</b></div></label><div className="capacity-meter"><i style={{width:`${Math.min(100,enginePlannedMinutes/engineCapacityMinutes*100)}%`}}/></div><div className="capacity-stats"><span><b>{Math.round(enginePlannedMinutes/60*10)/10}h</b> planned</span><span><b>{Math.max(0,Math.round((engineCapacityMinutes-enginePlannedMinutes)/60*10)/10)}h</b> available</span></div><div className="engine-alert">{enginePlannedMinutes>engineCapacityMinutes?<><Bell size={16}/><span>Your plan exceeds today's capacity. Move lower-value work.</span></>:<><Check size={16}/><span>Your planned workload fits inside your stated capacity.</span></>}</div></article>
+        </div>
+        <div className="productivity-grid lower">
+          <article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">CREATE WORK</span><h2>Capture the whole task.</h2></div><Plus size={20}/></div><div className="engine-form-grid"><input value={engineTaskTitle} onChange={e=>setEngineTaskTitle(e.target.value)} placeholder="Task that needs to get done…"/><input type="date" value={engineTaskDate} onChange={e=>setEngineTaskDate(e.target.value)}/><select value={engineTaskPriority} onChange={e=>setEngineTaskPriority(e.target.value)}><option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><select value={engineTaskDuration} onChange={e=>setEngineTaskDuration(Number(e.target.value))}><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">1 hour</option><option value="90">90 min</option><option value="120">2 hours</option></select><select value={engineTaskProject} onChange={e=>setEngineTaskProject(e.target.value)}><option value="">No project</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><select value={engineTaskRecurrence} onChange={e=>setEngineTaskRecurrence(e.target.value)}><option value="none">One-time</option><option value="daily">Every day</option><option value="weekly">Every week</option><option value="monthly">Every month</option></select><select value={engineTaskDependency} onChange={e=>setEngineTaskDependency(e.target.value)}><option value="">No dependency</option>{tasks.filter(t=>t.status!=="completed").slice(0,30).map(t=><option key={t.id} value={t.id}>After: {t.title}</option>)}</select><button className="primary-small" onClick={createEngineTask}><Plus size={15}/> Create task</button></div></article>
+          <article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">PROJECTS</span><h2>Workstreams with a finish line.</h2></div><BriefcaseBusiness size={20}/></div><div className="engine-project-create"><input value={projectName} onChange={e=>setProjectName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addProject()} placeholder="New project name…"/><button className="primary-small" onClick={addProject}><Plus size={15}/> Project</button></div><div className="engine-project-list">{engineProjects.map(p=><div key={p.id}><div><b>{p.name}</b><small>{p.completed}/{p.items.length} tasks complete</small></div><strong>{p.progress}%</strong><i><em style={{width:`${p.progress}%`}}/></i></div>)}{!projects.length&&<div className="tracker-empty-big"><BriefcaseBusiness size={26}/><h3>Create your first workstream.</h3><p>Projects group tasks into a measurable outcome.</p></div>}</div></article>
+        </div>
+        <article className="tracker-large-card engine-rules-card"><div className="panel-heading"><div><span className="card-kicker">OPERATING RULES</span><h2>How TRACKEN decides what matters.</h2></div><ShieldCheck size={20}/></div><div className="engine-rule-grid"><span><b>01 · PRIORITY</b><small>Urgent and high-impact work rises first.</small></span><span><b>02 · DEADLINE</b><small>Older and overdue work gains urgency.</small></span><span><b>03 · BLOCKERS</b><small>Dependencies prevent false completion.</small></span><span><b>04 · CAPACITY</b><small>Planned minutes are compared with available time.</small></span></div></article>
+        <ProductivityCalendar tasks={tasks} />
+      </section>}
+      {tab==="planner"&&<section className="planner-engine">
+        <div className="planner-toolbar"><button className="ghost-small" onClick={()=>{const d=new Date(plannerDate+"T12:00:00");d.setDate(d.getDate()-1);setPlannerDate(d.toISOString().slice(0,10));}}><ArrowLeft size={15}/> Previous</button><div><span className="card-kicker">DAILY PLAN</span><h2>{new Date(plannerDate+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</h2></div><div className="planner-toolbar-actions"><button className="ghost-small" onClick={()=>setPlannerDate(new Date().toISOString().slice(0,10))}>Today</button><button className="ghost-small" onClick={()=>{const d=new Date(plannerDate+"T12:00:00");d.setDate(d.getDate()+1);setPlannerDate(d.toISOString().slice(0,10));}}>Next <ArrowRight size={15}/></button></div></div>
+        <div className="planner-kpis"><article className="planner-kpi-main"><span>PLANNING SCORE</span><strong>{Math.min(100,planningScore)}</strong><p>{plannerDone} of {plannerTasks.length} planned tasks complete</p><div className="tracker-progress"><i style={{width:`${Math.min(100,planningScore)}%`}}/></div></article><article><span>OPEN PRIORITIES</span><strong>{priorityOpen}</strong><small>High-impact work needing attention</small></article><article><span>7-DAY QUEUE</span><strong>{upcomingTasks.filter(t=>t.status!=="completed").length}</strong><small>Open tasks across the next week</small></article></div>
+        <div className="planner-grid">
+          <article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">TODAY'S RUNWAY</span><h2>Plan the work, then execute.</h2></div><CalendarDays size={20}/></div>{plannerTasks.length?<div className="planner-task-list">{plannerTasks.map(t=><div className="planner-task-row" key={t.id}><span className={`tracker-status-dot ${t.status}`}></span><div><b>{t.title}</b><small>{t.priority||"medium"}{t.goal_id?" · linked goal":""}</small></div><select value={t.task_date} disabled={movingTaskId===t.id} onChange={e=>moveTask(t,e.target.value)}><option value={t.task_date}>Today</option>{nextSevenDays.filter(d=>d!==t.task_date).map(d=><option key={d} value={d}>{new Date(d+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}</option>)}</select></div>)}</div>:<div className="tracker-empty-big"><CalendarDays size={28}/><h3>No work planned.</h3><p>Your day is open. Add tasks from the Tasks tracker and they will appear here automatically.</p></div>}</article>
+          <article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">GOAL RADAR</span><h2>Is your effort on schedule?</h2></div><Target size={20}/></div><div className="planner-goal-list">{goals.filter(g=>g.status==="active").slice(0,5).map(g=>{const progress=g.target_value>0?Math.min(100,Math.round(Number(g.current_value||0)/Number(g.target_value)*100)):0; const daysLeft=g.target_date?Math.ceil((new Date(`${g.target_date}T12:00:00`)-new Date())/86400000):null; const risk=daysLeft!==null&&daysLeft<30&&progress<70; return <div key={g.id}><div><b>{g.title}</b><span>{risk?"At risk":daysLeft===null?"No deadline":`${Math.max(0,daysLeft)} days left`}</span></div><i><em style={{width:`${progress}%`}}/></i><small>{progress}% complete</small></div>})}{!goals.filter(g=>g.status==="active").length&&<div className="tracker-empty-big"><Target size={25}/><h3>No active goals.</h3><p>Create a goal to give your plan a destination.</p></div>}</div></article>
+        </div>
+        <article className="tracker-large-card planner-week-card"><div className="panel-heading"><div><span className="card-kicker">NEXT 7 DAYS</span><h2>Upcoming workload</h2></div><ListChecks size={20}/></div><div className="planner-week-grid">{nextSevenDays.map(d=>{const dayTasks=tasks.filter(t=>t.task_date===d); const doneDay=dayTasks.filter(t=>t.status==="completed").length; return <button key={d} className={plannerDate===d?"selected":""} onClick={()=>setPlannerDate(d)}><span>{new Date(d+"T12:00:00").toLocaleDateString("en-US",{weekday:"short"})}</span><b>{new Date(d+"T12:00:00").getDate()}</b><small>{doneDay}/{dayTasks.length||0}</small></button>})}</div></article>
+      </section>}
+      {tab==="tasks"&&<section className="task-work-layout">
+        <article className="tracker-hero-card task-work-summary"><div><span>TODAY'S WORK</span><strong>{todayTasks.length}</strong><p>{done} completed · {todayTasks.length-done} remaining</p></div><div className="task-summary-progress"><span>{todayTasks.length?Math.round(done/todayTasks.length*100):0}% complete</span><div className="tracker-progress"><i style={{width:`${todayTasks.length?done/todayTasks.length*100:0}%`}}/></div></div></article>
+        <article className="tracker-large-card task-capture-card"><div className="panel-heading"><div><span className="card-kicker">QUICK CAPTURE</span><h2>Add a task here.</h2><p className="tracker-copy">Capture work without leaving the task system.</p></div><Plus size={20}/></div><div className="task-quick-add"><input value={taskQuickTitle} onChange={e=>setTaskQuickTitle(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addQuickTask()} placeholder="What needs to get done?"/><select value={taskQuickPriority} onChange={e=>setTaskQuickPriority(e.target.value)}><option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><input type="date" value={taskQuickDate} onChange={e=>setTaskQuickDate(e.target.value)}/><button className="primary-small task-add-button" onClick={addQuickTask}><Plus size={15}/> Add task</button></div><div className="panel-heading task-queue-heading"><div><span className="card-kicker">PRIORITY QUEUE</span><h2>What needs your attention</h2></div><ListChecks size={20}/></div>{todayTasks.length?<div className="tracker-task-table">{todayTasks.slice(0,12).map(t=>editingTaskId===t.id?<div className="tracker-task-row tracker-task-row-edit" key={t.id}><span className={`tracker-status-dot ${t.status}`}></span><input className="task-inline-title" value={taskEdit.title} onChange={e=>setTaskEdit({...taskEdit,title:e.target.value})}/><select value={taskEdit.priority} onChange={e=>setTaskEdit({...taskEdit,priority:e.target.value})}><option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><input type="date" value={taskEdit.task_date} onChange={e=>setTaskEdit({...taskEdit,task_date:e.target.value})}/><div className="task-row-actions"><button className="primary-small task-save-button" onClick={saveTaskEdit}>Save changes</button><button className="ghost-small" onClick={cancelEditTask}>Cancel</button></div></div>:<div className="tracker-task-row" key={t.id}><button className={`task-check-button ${t.status==="completed"?"done":""}`} onClick={()=>toggleTask?.(t)} aria-label={t.status==="completed"?"Mark task open":"Mark task complete"}>{t.status==="completed"?<Check size={12}/>:null}</button><div className="task-row-main"><b className={t.status==="completed"?"task-completed-title":""}>{t.title}</b><small>{String(t.priority||"medium")} · Due {t.task_date||"No date"}</small></div><span className="task-status-label">{t.status==="completed"?"Completed":"Open"}</span><button className="task-edit-button" onClick={()=>startEditTask(t)} aria-label={`Edit ${t.title}`} title="Edit task"><PenLine size={15}/></button></div>)}</div>:<div className="tracker-empty-big"><ListChecks size={28}/><h3>Your queue is clear.</h3><p>Add a task above to build today's runway.</p></div>}</article>
+      </section>}
+      {tab==="goals"&&<section className="goals-route-shell"><GoalsPage session={session} goals={goals} setGoals={setGoals} tasks={tasks} theme={theme} toggleTheme={toggleTheme} onBack={onBack} onError={(message)=>window.alert(message)} /></section>}
+      {tab==="habits"&&<section className="tracker-content-grid habits-workspace"><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">CONSISTENCY ENGINE</span><h2>Build habits by showing up.</h2><p className="tracker-copy">Set a habit for a defined duration, then manually mark each day complete. No automatic streaks.</p></div><Flame size={20}/></div><div className="habit-control-bar"><div><strong>{habits.length}</strong><span>habits in your system</span></div><button className="tracker-big-action compact" onClick={openNewHabit}><Plus size={16}/> New habit</button></div>{showHabitForm&&<div className="habit-form-card"><div className="habit-form-head"><div><span className="card-kicker">{editingHabitId?"EDIT HABIT":"NEW HABIT"}</span><h3>{editingHabitId?"Refine your routine.":"What are you building?"}</h3></div><button className="icon-button" onClick={()=>setShowHabitForm(false)} aria-label="Close">×</button></div><div className="habit-form-grid"><label>Habit name<input value={habitForm.title} onChange={e=>setHabitForm({...habitForm,title:e.target.value})} placeholder="e.g. Read 20 pages"/></label><label>Start date<input type="date" value={habitForm.startDate} onChange={e=>setHabitForm({...habitForm,startDate:e.target.value})}/></label><label>Duration (days)<input type="number" min="1" max="365" value={habitForm.durationDays} onChange={e=>setHabitForm({...habitForm,durationDays:e.target.value})}/></label></div><div className="habit-form-actions"><button className="ghost-small" onClick={()=>setShowHabitForm(false)}>Cancel</button><button className="primary-small" onClick={saveHabit}>{editingHabitId?"Save changes":"Create habit"}</button></div></div>}<div className="habit-system-list">{habits.length ? habits.map(renderHabitCard) : <div className="tracker-empty-big"><Flame size={28}/><h3>Start your first habit.</h3><p>Choose a habit, give it a duration, and manually check each day you complete it.</p><button className="tracker-big-action compact" onClick={openNewHabit}><Plus size={16}/> Create your first habit</button></div>}</div></article></section>}
+      {tab==="focus"&&<section className="tracker-focus-layout"><article className="focus-command-card"><span>DEEP WORK</span><div className="tracker-focus-clock">{formatFocus(focusSeconds)}</div><div className="focus-presets">{[25,50,90].map(p=><button className={focusPreset===p?"selected":""} key={p} onClick={()=>{setFocusPreset(p);setFocusSeconds(p*60);setFocusRunning(false)}}>{p}m</button>)}</div><div className="focus-actions"><button className="primary-small" onClick={()=>setFocusRunning(v=>!v)}>{focusRunning?"Pause":"Start focus"}</button><button className="ghost-small" onClick={()=>{setFocusRunning(false);setFocusSeconds(focusPreset*60)}}>Reset</button></div></article><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">FOCUS PRINCIPLE</span><h2>Protect your best hours.</h2></div><Zap size={20}/></div><p className="tracker-copy">Use a focused session for the one task that matters most. TRACKEN keeps deep work and execution measurable without cluttering your workflow.</p><div className="tracker-feature-list"><span><Check size={15}/> No distractions</span><span><Check size={15}/> Preset sessions</span><span><Check size={15}/> Works with Study & Tasks</span></div></article><article className="tracker-large-card focus-time-card"><div className="panel-heading"><div><span className="card-kicker">TIME TRACKER</span><h2>Make time visible.</h2></div><Clock3 size={20}/></div><div className="focus-time-row"><div><strong>{formatTime(trackedSeconds)}</strong><span>{timeRunning?"Tracking now":"Time captured today"}</span></div><button className={`tracker-big-action compact ${timeRunning?"running":""}`} onClick={()=>setTimeRunning(v=>!v)}>{timeRunning?"Stop tracking":trackedSeconds>0?"Resume tracking":"Start tracking"}</button></div></article></section>}
+      {tab==="money"&&<section className="tracker-money"><div className="money-kpis"><article><span>INCOME</span><strong>₹{totalIncome.toLocaleString("en-IN")}</strong></article><article><span>EXPENSES</span><strong>₹{totalExpense.toLocaleString("en-IN")}</strong></article><article><span>BALANCE</span><strong>₹{moneyBalance.toLocaleString("en-IN")}</strong></article></div><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">CASH FLOW</span><h2>Track every rupee.</h2></div><WalletCards size={20}/></div><div className="tracker-add-row money-add"><select value={entry.type} onChange={e=>setEntry({...entry,type:e.target.value})}><option value="expense">Expense</option><option value="income">Income</option></select><input value={entry.title} onChange={e=>setEntry({...entry,title:e.target.value})} placeholder="Description"/><input type="number" value={entry.amount} onChange={e=>setEntry({...entry,amount:e.target.value})} placeholder="Amount"/><button onClick={addMoney}><Plus size={16}/> Add</button></div><div className="tracker-transaction-list">{money.slice(0,15).map(x=>editingMoneyId===x.id?<div className="transaction-edit-row" key={x.id}><select value={moneyEdit.type} onChange={e=>setMoneyEdit({...moneyEdit,type:e.target.value})}><option value="expense">Expense</option><option value="income">Income</option></select><input value={moneyEdit.title} onChange={e=>setMoneyEdit({...moneyEdit,title:e.target.value})}/><input type="number" value={moneyEdit.amount} onChange={e=>setMoneyEdit({...moneyEdit,amount:e.target.value})}/><input value={moneyEdit.category} onChange={e=>setMoneyEdit({...moneyEdit,category:e.target.value})}/><button className="primary-small" onClick={saveMoneyEdit}>Save</button><button className="ghost-small" onClick={()=>setEditingMoneyId(null)}>Cancel</button></div>:<div key={x.id}><span className={x.type}>{x.type==="income"?<TrendingUp size={16}/>:<TrendingDown size={16}/>}</span><b>{x.title}</b><small>{x.category}</small><strong className={x.type}>{x.type==="income"?"+":"−"}₹{Number(x.amount).toLocaleString("en-IN")}</strong><div className="row-actions"><button aria-label="Edit transaction" onClick={()=>startEditMoney(x)}><PenLine size={15}/></button><button aria-label="Delete transaction" onClick={()=>deleteMoney(x.id)}><Trash2 size={15}/></button></div></div>)}{!money.length&&<div className="tracker-empty-big"><Receipt size={28}/><h3>No transactions yet.</h3><p>Add your first income or expense to start your money timeline.</p></div>}</div></article><article className="tracker-large-card budget-inline-card"><div className="panel-heading"><div><span className="card-kicker">BUDGET</span><h2>Give your cashflow a boundary.</h2><p className="tracker-copy">Set your monthly spending limit without leaving Cashflow.</p></div><PieChart size={20}/></div><div className="budget-editor"><input type="number" value={budget||""} onChange={e=>setBudget(Number(e.target.value)||0)} placeholder="Monthly budget"/><div className="budget-track"><i style={{width:`${budget?Math.min(100,totalExpense/budget*100):0}%`}}/></div><b>{budget?Math.round(totalExpense/budget*100):0}% used</b></div><div className="budget-inline-meta"><span>Spent <b>₹{totalExpense.toLocaleString("en-IN")}</b></span><span>Remaining <b className={budget-totalExpense>=0?"positive":"negative"}>₹{Math.abs(budget-totalExpense).toLocaleString("en-IN")}</b></span></div></article></section>}
+      {tab==="budget"&&<section className="tracker-money"><div className="money-kpis"><article><span>MONTHLY BUDGET</span><strong>₹{Number(budget).toLocaleString("en-IN")}</strong></article><article><span>SPENT</span><strong>₹{totalExpense.toLocaleString("en-IN")}</strong></article><article><span>REMAINING</span><strong className={budget-totalExpense>=0?"positive":"negative"}>₹{Math.abs(budget-totalExpense).toLocaleString("en-IN")}</strong></article></div><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">BUDGET CONTROL</span><h2>Give your money a boundary.</h2></div><PieChart size={20}/></div><div className="budget-editor"><input type="number" value={budget||""} onChange={e=>setBudget(Number(e.target.value)||0)} placeholder="Monthly budget"/><div className="budget-track"><i style={{width:`${budget?Math.min(100,totalExpense/budget*100):0}%`}}/></div><b>{budget?Math.round(totalExpense/budget*100):0}% used</b></div><div className="tracker-stat-grid"><div><b>₹{totalIncome.toLocaleString("en-IN")}</b><span>Income</span></div><div><b>₹{totalExpense.toLocaleString("en-IN")}</b><span>Expenses</span></div><div><b>{money.filter(x=>x.type==="expense").length}</b><span>Purchases</span></div><div><b>{budget?Math.max(0,Math.round(budget-totalExpense)):0}</b><span>Room left</span></div></div></article></section>}
+      {tab==="investments"&&<section className="tracker-money"><div className="money-kpis"><article><span>PORTFOLIO</span><strong>₹{portfolio.toLocaleString("en-IN")}</strong></article><article><span>INVESTED</span><strong>₹{invested.toLocaleString("en-IN")}</strong></article><article><span>GAIN / LOSS</span><strong className={portfolio-invested>=0?"positive":"negative"}>{portfolio-invested>=0?"+":"−"}₹{Math.abs(portfolio-invested).toLocaleString("en-IN")}</strong></article></div><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">PORTFOLIO</span><h2>Keep your holdings visible.</h2></div><BriefcaseBusiness size={20}/></div><div className="tracker-add-row money-add"><input value={holding.name} onChange={e=>setHolding({...holding,name:e.target.value})} placeholder="Asset / fund name"/><input type="number" value={holding.invested} onChange={e=>setHolding({...holding,invested:e.target.value})} placeholder="Invested"/><input type="number" value={holding.value} onChange={e=>setHolding({...holding,value:e.target.value})} placeholder="Current value"/><button onClick={addInvestment}><Plus size={16}/> Add</button></div><div className="tracker-transaction-list">{investments.map(x=>editingInvestmentId===x.id?<div className="transaction-edit-row" key={x.id}><input value={investmentEdit.name} onChange={e=>setInvestmentEdit({...investmentEdit,name:e.target.value})}/><input type="number" value={investmentEdit.invested} onChange={e=>setInvestmentEdit({...investmentEdit,invested:e.target.value})}/><input type="number" value={investmentEdit.value} onChange={e=>setInvestmentEdit({...investmentEdit,value:e.target.value})}/><button className="primary-small" onClick={saveInvestmentEdit}>Save</button><button className="ghost-small" onClick={()=>setEditingInvestmentId(null)}>Cancel</button></div>:<div key={x.id}><span className="investment"><Percent size={16}/></span><b>{x.name}</b><small>₹{Number(x.invested).toLocaleString("en-IN")} invested</small><strong>₹{Number(x.value).toLocaleString("en-IN")}</strong><div className="row-actions"><button aria-label="Edit investment" onClick={()=>startEditInvestment(x)}><PenLine size={15}/></button><button aria-label="Delete investment" onClick={()=>deleteInvestment(x.id)}><Trash2 size={15}/></button></div></div>)}{!investments.length&&<div className="tracker-empty-big"><BriefcaseBusiness size={28}/><h3>Your portfolio is empty.</h3><p>Add holdings manually. Market integrations can be connected later.</p></div>}</div></article></section>}
+      {tab==="networth"&&<section className="tracker-money"><div className="money-kpis"><article><span>NET WORTH</span><strong>₹{(portfolio+moneyBalance+assets.reduce((a,x)=>a+Number(x.value||0),0)-liabilities.reduce((a,x)=>a+Number(x.value||0),0)).toLocaleString("en-IN")}</strong></article><article><span>TOTAL ASSETS</span><strong>₹{(portfolio+Math.max(0,moneyBalance)+assets.reduce((a,x)=>a+Number(x.value||0),0)).toLocaleString("en-IN")}</strong></article><article><span>LIABILITIES</span><strong className="negative">₹{liabilities.reduce((a,x)=>a+Number(x.value||0),0).toLocaleString("en-IN")}</strong></article></div><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">PERSONAL BALANCE SHEET</span><h2>Know what you own and owe.</h2></div><Landmark size={20}/></div><div className="tracker-add-row"><button onClick={addAsset}><Plus size={16}/> Add asset</button><button onClick={addLiability}><Plus size={16}/> Add liability</button></div><div className="tracker-stat-grid"><div><b>₹{portfolio.toLocaleString("en-IN")}</b><span>Investments</span></div><div><b>₹{Math.max(0,moneyBalance).toLocaleString("en-IN")}</b><span>Cash balance</span></div><div><b>{assets.length}</b><span>Other assets</span></div><div><b>{liabilities.length}</b><span>Liabilities</span></div></div><div className="balance-lists"><div><span>ASSETS</span>{assets.length?assets.map(x=><p key={x.id}><b>{x.name}</b><strong>₹{Number(x.value).toLocaleString("en-IN")}</strong></p>):<p className="muted-row">No other assets added.</p>}</div><div><span>LIABILITIES</span>{liabilities.length?liabilities.map(x=><p key={x.id}><b>{x.name}</b><strong>₹{Number(x.value).toLocaleString("en-IN")}</strong></p>):<p className="muted-row">No liabilities added.</p>}</div></div></article></section>}
+      {showStudySummary&&<StudySummaryModal history={history} onClose={()=>setShowStudySummary(false)} />}
+      </main></div></div>;
+}
+
+function ProductivityCalendar({ tasks = [] }) {
+  const [month, setMonth] = useState(() => new Date());
+  const start = new Date(month.getFullYear(), month.getMonth(), 1);
+  const first = (start.getDay() + 6) % 7;
+  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const cells = [];
+  for (let i=0;i<first;i++) cells.push(null);
+  for (let d=1;d<=daysInMonth;d++) cells.push(new Date(month.getFullYear(), month.getMonth(), d));
+  while(cells.length%7) cells.push(null);
+  const taskCount={}; tasks.forEach(t=>{if(t.task_date) taskCount[t.task_date]=(taskCount[t.task_date]||0)+1;});
+  const key=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  return <article className="tracker-large-card productivity-calendar-card"><div className="panel-heading"><div><span className="card-kicker">PRODUCTIVITY CALENDAR</span><h2>See your workload by day.</h2><p className="tracker-copy">Your planning calendar lives directly inside the Productivity Engine.</p></div><CalendarDays size={20}/></div><div className="productivity-calendar-toolbar"><button className="ghost-small" onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()-1,1))} aria-label="Previous month">‹</button><strong>{month.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</strong><button className="ghost-small" onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()+1,1))} aria-label="Next month">›</button><button className="ghost-small" onClick={()=>setMonth(new Date())}>Today</button></div><div className="productivity-calendar-weekdays">{["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=><span key={d}>{d}</span>)}</div><div className="productivity-calendar-grid">{cells.map((date,i)=>date?<div key={i} className={date.toDateString()===new Date().toDateString()?"today":""}><span>{date.getDate()}</span>{taskCount[key(date)]?<b>{taskCount[key(date)]} task{taskCount[key(date)]===1?"":"s"}</b>:<small>No tasks</small>}</div>:<div className="blank" key={i}/>)}</div></article>;
+}
+
+function CalendarHistoryPage({ session, theme, toggleTheme, onBack }) {
+  const userId = session.user.id;
+  const [records, setRecords] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [month, setMonth] = useState(new Date());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const dateKey = (date) => {
+    const y=date.getFullYear(), m=String(date.getMonth()+1).padStart(2,"0"), d=String(date.getDate()).padStart(2,"0");
+    return `${y}-${m}-${d}`;
+  };
+  const fmt = (key) => new Date(`${key}T12:00:00`).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+  const selectedKey=dateKey(selectedDate);
+
+  useEffect(() => {
+    (async()=>{
+      setLoading(true); setError("");
+      const [r,t]=await Promise.all([
+        supabase.from("daily_records").select("*").eq("user_id",userId).order("record_date",{ascending:false}),
+        supabase.from("tasks").select("*").eq("user_id",userId)
+      ]);
+      if(r.error) setError(r.error.message);
+      if(t.error) setError(t.error.message);
+      setRecords(r.data||[]);
+      setTasks(t.data||[]);
+      setLoading(false);
+    })();
+  },[userId]);
+
+  const recordMap=useMemo(()=>Object.fromEntries(records.map(r=>[r.record_date,r])),[records]);
+  const taskMap=useMemo(()=>{
+    const m={};
+    tasks.forEach(t=>{
+      (m[t.task_date] ||= {total:0,done:0});
+      m[t.task_date].total++;
+      if(t.status==="completed") m[t.task_date].done++;
+    });
+    return m;
+  },[tasks]);
+
+  const start=new Date(month.getFullYear(),month.getMonth(),1);
+  const first=(start.getDay()+6)%7;
+  const daysIn=new Date(month.getFullYear(),month.getMonth()+1,0).getDate();
+  const cells=[];
+  for(let i=0;i<first;i++) cells.push(null);
+  for(let d=1;d<=daysIn;d++) cells.push(new Date(month.getFullYear(),month.getMonth(),d));
+  while(cells.length%7) cells.push(null);
+
+  const selectedRecord=recordMap[selectedKey];
+  const selectedTask=taskMap[selectedKey] || {total:0,done:0};
+  const selectedScore=selectedRecord?.daily_score || 0;
+  const activeDays=records.filter(r=>(r.daily_score||0)>0).length;
+
+  const history=records.slice().sort((a,b)=>b.record_date.localeCompare(a.record_date));
+
+  const activityClass=(date)=>{
+    if(!date) return "";
+    const r=recordMap[dateKey(date)];
+    if(!r) return "empty";
+    const score=Number(r.daily_score||0);
+    if(score>=80) return "high";
+    if(score>=50) return "medium";
+    return "low";
+  };
+
+  return (
+    <div className="subpage-shell calendar-history-page">
+      <header className="calendar-topbar">
+        <div className="calendar-topbar-title">
+          <span className="card-kicker">TRACKEN CALENDAR</span>
+          <h1>Study calendar</h1>
+          <p>Track your study rhythm, daily scores and saved records.</p>
+        </div>
+        <div className="calendar-top-actions">
+          <button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode">
+            {theme==="light"?<Moon size={17}/>:<Sun size={17}/>}
+            <span>{theme==="light"?"Dark mode":"Light mode"}</span>
+          </button>
+          <button className="secondary-cta compact-cta calendar-dashboard-button" onClick={onBack}>
+            <LayoutDashboard size={16}/>
+            <span>Dashboard</span>
+            <ArrowRight size={16}/>
+          </button>
+        </div>
+      </header>
+
+      <main className="calendar-page-main">
+        <div className="calendar-page-inner">
+          <section className="calendar-hero">
+            <div className="calendar-hero-copy">
+              <span className="eyebrow"><span></span> CALENDAR · HISTORY</span>
+              <h2>Your study <em>timeline.</em></h2>
+              <p>See every study day, task completion and daily record in one place.</p>
+            </div>
+            <div className="history-overview-card">
+              <div>
+                <span>ACTIVE STUDY DAYS</span>
+                <strong>{activeDays}</strong>
+                <small>days with a recorded score</small>
+              </div>
+              <div className="overview-card-mark"><CalendarDays size={20}/></div>
+            </div>
+          </section>
+
+          {error && <div className="dashboard-error">{error}</div>}
+
+          <section className="calendar-history-grid">
+            <article className="calendar-panel">
+              <div className="calendar-panel-head">
+                <div>
+                  <span className="card-kicker">STUDY CALENDAR</span>
+                  <h2>{month.toLocaleDateString("en-US",{month:"long",year:"numeric"})}</h2>
+                </div>
+                <div className="calendar-nav">
+                  <button className="calendar-today-button" onClick={()=>{setMonth(new Date());setSelectedDate(new Date());}}>Today</button>
+                  <button aria-label="Previous month" onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()-1,1))}>‹</button>
+                  <button aria-label="Next month" onClick={()=>setMonth(new Date(month.getFullYear(),month.getMonth()+1,1))}>›</button>
+                </div>
+              </div>
+              <div className="calendar-weekdays">{["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map(d=><span key={d}>{d}</span>)}</div>
+              <div className="calendar-grid">
+                {cells.map((date,i)=>{
+                  if(!date) return <div className="calendar-cell blank" key={`b${i}`}/>;
+                  const key=dateKey(date), r=recordMap[key], score=Number(r?.daily_score||0);
+                  return <button key={key} className={`calendar-cell ${activityClass(date)} ${key===selectedKey?"selected":""}`} onClick={()=>setSelectedDate(date)}>
+                    <span>{date.getDate()}</span>
+                    {r && <b>{Math.round(score)}%</b>}
+                    {taskMap[key]?.done ? <i>{taskMap[key].done}</i> : null}
+                  </button>;
+                })}
+              </div>
+              <div className="calendar-legend">
+                <span><i className="legend-dot high"></i> Strong</span>
+                <span><i className="legend-dot medium"></i> Active</span>
+                <span><i className="legend-dot low"></i> Light</span>
+                <span><i className="legend-dot empty"></i> No record</span>
+              </div>
+            </article>
+
+            <article className="selected-day-panel">
+              <div className="selected-day-head">
+                <span className="card-kicker">SELECTED DAY</span>
+                <h2>{selectedDate.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</h2>
+                <strong>{selectedScore ? `${Math.round(selectedScore)}%` : "—"}</strong>
+              </div>
+              {selectedRecord ? (
+                <div className="selected-stats">
+                  <div><span>Study time</span><strong>{Math.floor((selectedRecord.lecture_minutes||0)/60)}h {(selectedRecord.lecture_minutes||0)%60}m</strong></div>
+                  <div><span>Lectures</span><strong>{selectedRecord.lectures_watched||0}</strong></div>
+                  <div><span>Questions</span><strong>{selectedRecord.questions_done||0}</strong></div>
+                  <div><span>Pages</span><strong>{selectedRecord.pages_read||0}</strong></div>
+                  <div><span>Exercise</span><strong>{selectedRecord.exercise_done ? "Completed" : "Not completed"}</strong></div>
+                  <div><span>Tasks</span><strong>{selectedTask.done} / {selectedTask.total}</strong></div>
+                </div>
+              ) : (
+                <div className="selected-empty">
+                  <CalendarDays size={28}/>
+                  <h3>No study record</h3>
+                  <p>No daily record has been saved for this date yet.</p>
+                </div>
+              )}
+            </article>
+          </section>
+
+
+          <section className="intelligence-grid">
+            <article className="achievements-panel">
+              <div className="intelligence-head">
+                <div>
+                  <span className="card-kicker">ACHIEVEMENTS</span>
+                  <h2>Milestones you've earned.</h2>
+                  <p>Automatically unlocked from your real study activity.</p>
+                </div>
+                <Trophy size={22} />
+              </div>
+              <div className="achievement-grid">
+                {(() => {
+                  const totalQuestions = records.reduce((a,r)=>a+Number(r.questions_done||0),0);
+                  const totalPages = records.reduce((a,r)=>a+Number(r.pages_read||0),0);
+                  const totalTasks = tasks.length;
+                  const completedTasks = tasks.filter(t=>t.status==="completed").length;
+                  const bestScore = Math.max(0,...records.map(r=>Number(r.daily_score||0)));
+                  const days = new Set(records.filter(r=>Number(r.daily_score||0)>0).map(r=>r.record_date)).size;
+                  const achievements = [
+                    {icon:"✓", title:"First Step", text:"Save your first study record.", unlocked:records.length>0},
+                    {icon:"🔥", title:"7-Day Warrior", text:"Build a 7-day study streak.", unlocked: (()=>{let run=0,max=0; const ds=new Set(records.map(r=>r.record_date)); const today=new Date(); for(let i=0;i<365;i++){const d=new Date(today);d.setDate(today.getDate()-i); if(ds.has(dateKey(d))) {run++;max=Math.max(max,run)} else run=0} return max>=7;})()},
+                    {icon:"💯", title:"Century", text:"Solve 100 questions in one day.", unlocked:records.some(r=>Number(r.questions_done||0)>=100)},
+                    {icon:"📚", title:"Bookworm", text:"Read 500 pages.", unlocked:totalPages>=500},
+                    {icon:"⚡", title:"Momentum", text:"Maintain 14 consecutive study days.", unlocked:days>=14},
+                    {icon:"🏆", title:"Perfect Day", text:"Score 100% on a study day.", unlocked:bestScore>=100},
+                    {icon:"✓", title:"Task Finisher", text:"Complete your first task.", unlocked:completedTasks>0},
+                    {icon:"🎯", title:"Committed", text:"Create your first goal.", unlocked:false}
+                  ];
+                  return achievements.map(a=>
+                    <div className={`achievement-card ${a.unlocked?"unlocked":"locked"}`} key={a.title}>
+                      <div className="achievement-icon">{a.unlocked ? a.icon : "🔒"}</div>
+                      <div><strong>{a.title}</strong><span>{a.text}</span></div>
+                      <small>{a.unlocked ? "UNLOCKED" : "LOCKED"}</small>
+                    </div>
+                  );
+                })()}
+              </div>
+            </article>
+
+            <article className="momentum-panel">
+              <div className="intelligence-head">
+                <div>
+                  <span className="card-kicker">MOMENTUM INTELLIGENCE</span>
+                  <h2>Your study momentum.</h2>
+                  <p>TRACKEN reads your recent consistency and turns it into useful guidance.</p>
+                </div>
+                <Sparkles size={22} />
+              </div>
+              {(() => {
+                const sorted=records.slice().sort((a,b)=>a.record_date.localeCompare(b.record_date));
+                const last7=sorted.slice(-7);
+                const previous7=sorted.slice(-14,-7);
+                const avg=(arr,key)=>arr.length?arr.reduce((a,r)=>a+Number(r[key]||0),0)/arr.length:0;
+                const recentHours=last7.reduce((a,r)=>a+Number(r.lecture_minutes||0),0)/60;
+                const prevHours=previous7.reduce((a,r)=>a+Number(r.lecture_minutes||0),0)/60;
+                const recentScore=avg(last7,"daily_score");
+                const prevScore=avg(previous7,"daily_score");
+                const recentQuestions=last7.reduce((a,r)=>a+Number(r.questions_done||0),0);
+                const trend=recentHours-prevHours;
+                const scoreTrend=recentScore-prevScore;
+                const consistency=Math.min(100,Math.round((last7.filter(r=>Number(r.daily_score||0)>0).length/7)*100));
+                let title="Build one more strong day.";
+                let body="Your recent activity is the foundation. A small, repeatable study session today keeps your momentum alive.";
+                if(consistency>=85 && trend>=0){title="You're building real momentum. 🔥"; body=`You recorded study activity on ${last7.filter(r=>Number(r.daily_score||0)>0).length} of the last 7 days. Keep the streak alive.`;}
+                else if(scoreTrend>=8){title="Your quality is improving. ↑"; body=`Your average score is up about ${Math.round(scoreTrend)} points versus the previous 7 recorded days.`;}
+                else if(trend>1){title="Your study time is climbing. ↑"; body=`You studied about ${trend.toFixed(1)} more hours than the previous 7-day period.`;}
+                else if(consistency<50){title="Protect your consistency."; body="Your recent activity has gaps. Start with one focused task today rather than waiting for a perfect study session.";}
+                return <div className="momentum-content">
+                  <div className="momentum-score"><span>CONSISTENCY</span><strong>{consistency}%</strong><div><i style={{width:`${consistency}%`}}/></div></div>
+                  <div className="momentum-message"><span className="momentum-label">CURRENT SIGNAL</span><h3>{title}</h3><p>{body}</p></div>
+                  <div className="momentum-stats">
+                    <div><span>7-day study</span><strong>{recentHours.toFixed(1)}h</strong></div>
+                    <div><span>Questions</span><strong>{recentQuestions}</strong></div>
+                    <div><span>Score trend</span><strong>{scoreTrend>=0?"+":""}{Math.round(scoreTrend)}%</strong></div>
+                  </div>
+                  <div className="momentum-next"><Sparkles size={16}/><span><b>Next best action:</b> complete one planned task and log the study session before you finish.</span></div>
+                </div>;
+              })()}
+            </article>
+          </section>
+
+          <section className="history-list-panel">
+            <div className="history-list-head">
+              <div><span className="card-kicker">COMPLETE HISTORY</span><h2>Previous study days</h2></div>
+              <span>{history.length} saved day{history.length===1?"":"s"}</span>
+            </div>
+            <div className="history-list">
+              {history.length ? history.map(r=>{
+                const tk=taskMap[r.record_date]||{total:0,done:0};
+                return <button key={r.record_date} className={`history-row ${r.record_date===selectedKey?"active":""}`} onClick={()=>setSelectedDate(new Date(`${r.record_date}T12:00:00`))}>
+                  <div className="history-date"><strong>{new Date(`${r.record_date}T12:00:00`).getDate()}</strong><span>{new Date(`${r.record_date}T12:00:00`).toLocaleDateString("en-US",{month:"short",weekday:"short"})}</span></div>
+                  <div className="history-row-main"><strong>{fmt(r.record_date)}</strong><span>{Math.floor((r.lecture_minutes||0)/60)}h {(r.lecture_minutes||0)%60}m study · {r.questions_done||0} questions · {r.pages_read||0} pages</span></div>
+                  <div className="history-row-tasks"><span>Tasks</span><strong>{tk.done}/{tk.total}</strong></div>
+                  <div className="history-row-score"><span>Score</span><strong>{Math.round(r.daily_score||0)}%</strong></div>
+                </button>;
+              }) : <div className="history-empty-large">{loading ? "Loading your study history…" : "Your saved daily records will appear here."}</div>}
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+
+function WeeklyReviewPage({ session, theme, toggleTheme, tasks, history, goals, habits, activityLog, trackedSeconds, completedFocusSessions, score, onBack }) {
+  const now = new Date();
+  const weekStart = new Date(now); weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7)); weekStart.setHours(0,0,0,0);
+  const inWeek = (iso) => new Date(iso) >= weekStart;
+  const weekTasks = tasks.filter(t => t.task_date && new Date(`${t.task_date}T23:59:59`) >= weekStart && new Date(`${t.task_date}T12:00:00`) <= now);
+  const done = weekTasks.filter(t=>t.status==='completed').length;
+  const completion = weekTasks.length ? Math.round(done/weekTasks.length*100) : 0;
+  const weekRecords = history.filter(r=>r.record_date && new Date(`${r.record_date}T12:00:00`) >= weekStart);
+  const studyMinutes = weekRecords.reduce((s,r)=>s+Number(r.lecture_minutes||0),0);
+  const questions = weekRecords.reduce((s,r)=>s+Number(r.questions_done||0),0);
+  const events = activityLog.filter(e=>inWeek(e.at));
+  const focus = events.filter(e=>e.type==='focus_completed').reduce((s,e)=>s+Number(e.value||0),0);
+  const habitDone = events.filter(e=>e.type==='habit_completed').length;
+  const activeDays = new Set([...weekRecords.map(r=>r.record_date), ...events.map(e=>e.at.slice(0,10))]).size;
+  const topGoal = goals.find(g=>g.status==='active');
+  const progress = topGoal?.target_value ? Math.min(100,Math.round(Number(topGoal.current_value||0)/Number(topGoal.target_value)*100)) : 0;
+  const strongest = completion >= 80 ? 'Execution' : studyMinutes >= 300 ? 'Study' : habitDone >= 5 ? 'Consistency' : 'Momentum';
+  const next = completion < 70 ? 'Close two high-priority tasks before adding new work.' : studyMinutes < 300 ? 'Protect one uninterrupted study block tomorrow.' : habitDone < 5 ? 'Use one small habit to keep the chain alive.' : 'Keep the current rhythm and raise the quality bar slightly.';
+  return <div className="review-shell">
+    <header className="review-topbar"><div className="tracker-page-brand"><button className="back-button" onClick={onBack}><ArrowLeft size={17}/></button><div><span>TRACKEN</span><small>WEEKLY REVIEW</small></div></div><div className="tracker-page-actions"><button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode">{theme==='light'?<Moon size={17}/>:<Sun size={17}/>}<span>{theme==='light'?"Dark mode":"Light mode"}</span></button></div></header>
+    <main className="review-workspace"><div className="review-heading"><div><span className="card-kicker">WEEKLY REVIEW · {weekStart.toLocaleDateString('en-US',{month:'short',day:'numeric'})} — {now.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span><h1>Turn activity into <em>direction.</em></h1><p>A concise read of what you actually did, where momentum came from, and what deserves attention next.</p></div><div className="review-score"><span>TRACKEN SCORE</span><strong>{score}</strong><small>current momentum</small></div></div>
+    <section className="review-stat-grid"><ReviewStat label="Task execution" value={`${completion}%`} meta={`${done}/${weekTasks.length} completed`}/><ReviewStat label="Study output" value={formatReviewMinutes(studyMinutes)} meta={`${questions} questions`}/><ReviewStat label="Focus" value={`${focus}m`} meta={`${completedFocusSessions} sessions total`}/><ReviewStat label="Active days" value={activeDays} meta={`${habitDone} habits completed`}/></section>
+    <section className="review-grid"><article className="review-card"><div className="review-card-head"><div><span className="card-kicker">WHAT WORKED</span><h2>Your strongest signal</h2></div><Award size={20}/></div><div className="review-highlight"><strong>{strongest}</strong><p>{strongest==='Execution' ? `You completed ${completion}% of planned tasks this week.` : strongest==='Study' ? `You logged ${formatReviewMinutes(studyMinutes)} of study and ${questions} questions.` : strongest==='Consistency' ? `You completed ${habitDone} habit check-ins and kept your routine visible.` : 'You have enough activity to start identifying a repeatable personal rhythm.'}</p></div></article><article className="review-card"><div className="review-card-head"><div><span className="card-kicker">NEXT WEEK</span><h2>One clear move</h2></div><Zap size={20}/></div><div className="review-next"><div className="review-next-icon"><Zap size={20}/></div><p>{next}</p></div></article></section>
+    <section className="review-card"><div className="review-card-head"><div><span className="card-kicker">CONNECTED PROGRESS</span><h2>Effort → outcome</h2><p>TRACKEN's core promise is to connect your daily evidence to meaningful progress.</p></div><TrendingUp size={20}/></div><div className="review-flow"><ReviewFlow label="Execution" value={completion}/><span>→</span><ReviewFlow label="Consistency" value={Math.min(100,Math.round((habitDone/Math.max(7,habits.length*7))*100))}/><span>→</span><ReviewFlow label="Goal" value={progress}/></div></section>
+    <section className="review-card"><div className="review-card-head"><div><span className="card-kicker">WEEKLY SNAPSHOT</span><h2>Your operating rhythm</h2></div><BarChart3 size={20}/></div><div className="review-bars">{Array.from({length:7},(_,i)=>{const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);const key=d.toISOString().slice(0,10);const mins=weekRecords.filter(r=>r.record_date===key).reduce((s,r)=>s+Number(r.lecture_minutes||0),0);const task=weekTasks.filter(t=>t.task_date===key).filter(t=>t.status==='completed').length;const h=Math.max(6,Math.min(100,mins/3+task*12));return <div key={key}><i style={{height:`${h}%`}}/><span>{d.toLocaleDateString('en-US',{weekday:'short'}).slice(0,2)}</span></div>})}</div></section>
+    </main></div>;
+}
+function ReviewStat({label,value,meta}){return <div className="review-stat"><span>{label}</span><strong>{value}</strong><small>{meta}</small></div>}
+function ReviewFlow({label,value}){return <div className="review-flow-item"><strong>{value}%</strong><span>{label}</span><i><em style={{width:`${Math.max(0,Math.min(100,value))}%`}}/></i></div>}
+function formatReviewMinutes(m){const n=Number(m)||0;return `${Math.floor(n/60)}h ${String(n%60).padStart(2,'0')}m`}
+
+function AnalyticsPage({ session, theme, toggleTheme, history, tasks, goals, onBack }) {
+  const [range, setRange] = useState(7);
+  const records = [...history].sort((a, b) => a.record_date.localeCompare(b.record_date));
+  const now = new Date();
+  const key = (d) => {
+    const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+  const money = (() => { try { return JSON.parse(localStorage.getItem("tracken-money") || "[]"); } catch { return []; } })();
+  const investments = (() => { try { return JSON.parse(localStorage.getItem("tracken-investments") || "[]"); } catch { return []; } })();
+  const habits = (() => { try { return JSON.parse(localStorage.getItem("tracken-habits") || "[]"); } catch { return []; } })();
+  const trackedSeconds = Number(localStorage.getItem("tracken-time-today") || 0);
+  const focusSessions = Number(localStorage.getItem("tracken-focus-sessions") || 0);
+  const activityLog = (() => { try { return JSON.parse(localStorage.getItem("tracken-activity-log") || "[]"); } catch { return []; } })();
+
+  const rangeStart = new Date(now);
+  rangeStart.setDate(now.getDate() - (range - 1));
+  const previousStart = new Date(rangeStart);
+  previousStart.setDate(rangeStart.getDate() - range);
+  const previousEnd = new Date(rangeStart);
+  previousEnd.setDate(rangeStart.getDate() - 1);
+  const filteredRecords = records.filter(r => r.record_date >= key(rangeStart) && r.record_date <= key(now));
+  const previousRecords = records.filter(r => r.record_date >= key(previousStart) && r.record_date <= key(previousEnd));
+  const sum = (arr, field) => arr.reduce((s, r) => s + Number(r[field] || 0), 0);
+  const minutes = sum(filteredRecords, "lecture_minutes");
+  const questions = sum(filteredRecords, "questions_done");
+  const pages = sum(filteredRecords, "pages_read");
+  const lectures = sum(filteredRecords, "lectures_watched");
+  const scores = filteredRecords.map(r => Number(r.daily_score || 0)).filter(n => n > 0);
+  const avg = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
+  const activeDays = filteredRecords.filter(r => Number(r.daily_score || 0) > 0).length;
+  const previousMinutes = sum(previousRecords, "lecture_minutes");
+  const previousQuestions = sum(previousRecords, "questions_done");
+  const previousScores = previousRecords.map(r => Number(r.daily_score || 0)).filter(n => n > 0);
+  const previousAvg = previousScores.length ? Math.round(previousScores.reduce((a, b) => a + b, 0) / previousScores.length) : 0;
+  const plannedTasks = tasks.filter(t => t.task_date >= key(rangeStart) && t.task_date <= key(now));
+  const doneTasks = plannedTasks.filter(t => t.status === "completed").length;
+  const completion = plannedTasks.length ? Math.round(doneTasks / plannedTasks.length * 100) : 0;
+  const previousTasks = tasks.filter(t => t.task_date >= key(previousStart) && t.task_date <= key(previousEnd));
+  const previousCompletion = previousTasks.length ? Math.round(previousTasks.filter(t => t.status === "completed").length / previousTasks.length * 100) : 0;
+  const daily = Array.from({ length: range }, (_, i) => {
+    const d = new Date(rangeStart); d.setDate(rangeStart.getDate() + i);
+    const k = key(d); const r = filteredRecords.find(x => x.record_date === k);
+    return { key: k, date: d, minutes: Number(r?.lecture_minutes || 0), questions: Number(r?.questions_done || 0), pages: Number(r?.pages_read || 0), score: Number(r?.daily_score || 0) };
+  });
+  const maxMinutes = Math.max(60, ...daily.map(d => d.minutes));
+  const bestDay = daily.reduce((best, d) => d.minutes > best.minutes ? d : best, daily[0] || { minutes: 0 });
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthRecords = records.filter(r => r.record_date >= key(monthStart));
+  const monthMinutes = sum(monthRecords, "lecture_minutes");
+  const monthQuestions = sum(monthRecords, "questions_done");
+  const monthPages = sum(monthRecords, "pages_read");
+  const totalMinutes = sum(records, "lecture_minutes");
+  const totalQuestions = sum(records, "questions_done");
+  const totalPages = sum(records, "pages_read");
+  const totalLectures = sum(records, "lectures_watched");
+  const formatDay = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const formatMinutes = m => `${Math.floor(m / 60)}h ${m % 60}m`;
+  const formatCompactMinutes = m => m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60 ? `${m % 60}m` : ""}`;
+  const activeGoals = goals.filter(g => g.status === "active");
+  const goalRows = activeGoals.map(g => {
+    const target = Number(g.target_value || 0), current = Number(g.current_value || 0);
+    const linked = tasks.filter(t => String(t.goal_id) === String(g.id));
+    const done = linked.filter(t => t.status === "completed").length;
+    return { ...g, progress: target > 0 ? Math.min(100, Math.round(current / target * 100)) : 0, done, linked: linked.length };
+  });
+  const totalIncome = money.filter(x => x.type === "income").reduce((s, x) => s + Number(x.amount || 0), 0);
+  const totalExpense = money.filter(x => x.type === "expense").reduce((s, x) => s + Number(x.amount || 0), 0);
+  const portfolio = investments.reduce((s, x) => s + Number(x.value || 0), 0);
+  const invested = investments.reduce((s, x) => s + Number(x.invested || 0), 0);
+  const moneyBalance = totalIncome - totalExpense;
+  const todayKey = new Date().toISOString().slice(0,10); const habitRate = habits.length ? Math.round(habits.filter(h => Array.isArray(h.completedDates) ? h.completedDates.includes(todayKey) : Boolean(h.done)).length / habits.length * 100) : 0;
+  const focusHours = Math.floor((Number(localStorage.getItem("tracken-focus-minutes") || 0)) / 60);
+  const pctChange = (current, previous) => previous ? Math.round(((current - previous) / Math.abs(previous)) * 100) : (current > 0 ? 100 : 0);
+  const studyChange = pctChange(minutes, previousMinutes);
+  const taskChange = pctChange(completion, previousCompletion);
+  const scoreChange = avg - previousAvg;
+  const dataSignals = [
+    minutes > 0 ? { icon: Clock3, label: "Study rhythm", value: `${formatCompactMinutes(minutes)}`, meta: `${studyChange >= 0 ? "+" : ""}${studyChange}% vs previous window`, tone: studyChange >= 0 ? "positive" : "negative" } : null,
+    plannedTasks.length ? { icon: ClipboardCheck, label: "Execution", value: `${completion}%`, meta: `${taskChange >= 0 ? "+" : ""}${taskChange}% completion change`, tone: taskChange >= 0 ? "positive" : "negative" } : null,
+    habits.length ? { icon: Flame, label: "Consistency", value: `${habitRate}%`, meta: `${habits.length} habits in your daily system`, tone: habitRate >= 70 ? "positive" : "neutral" } : null,
+    money.length ? { icon: WalletCards, label: "Cash flow", value: `₹${Math.abs(moneyBalance).toLocaleString("en-IN")}`, meta: moneyBalance >= 0 ? "positive net cash flow" : "expenses exceed income", tone: moneyBalance >= 0 ? "positive" : "negative" }
+      : null
+  ].filter(Boolean).slice(0, 4);
+  let primaryInsight = "Keep recording real activity and TRACKEN will turn it into stronger personal insights.";
+  let primaryAction = "Log one meaningful activity today.";
+  if (completion < 70 && plannedTasks.length) { primaryInsight = "Your biggest opportunity is closing the task loop. Fewer open tasks will make your progress more reliable."; primaryAction = "Finish one high-priority task before adding another."; }
+  else if (minutes < 300 && range === 7) { primaryInsight = "Your study rhythm has room to compound. A repeatable daily block is more valuable than occasional long sessions."; primaryAction = "Protect one 45–60 minute study block today."; }
+  else if (habitRate < 70 && habits.length) { primaryInsight = "Consistency is the current bottleneck. Make your smallest habits easier to complete every day."; primaryAction = "Complete the easiest open habit now."; }
+  else if (money.length && moneyBalance < 0) { primaryInsight = "Your recorded expenses are currently above your recorded income. Review the largest categories before adding new discretionary spending."; primaryAction = "Review your latest three expenses."; }
+  else if (scoreChange > 0) { primaryInsight = `Your average study score is up ${scoreChange} points versus the previous window. Protect the routine that created the improvement.`; primaryAction = "Repeat your strongest study pattern."; }
+
+  return (
+    <div className="analytics-page-shell tasken-app-shell">
+      <aside className="analytics-side-rail">
+        <button className="back-link" onClick={onBack}><ArrowLeft size={16}/> Back to dashboard</button>
+        <div className="subpage-brand"><div className="brand">TRACKEN<span>.</span></div><span>INTELLIGENCE</span></div>
+        <div className="analytics-side-card">
+          <div className="analytics-side-icon"><Sparkles size={22}/></div>
+          <strong>Turn activity into decisions.</strong>
+          <p>TRACKEN reads your saved work, consistency and money signals to show what is changing and what deserves attention next.</p>
+        </div>
+        <div className="intelligence-rail-note"><span>DATA SOURCES</span><b>{records.length + tasks.length + habits.length + money.length + investments.length}</b><small>tracked items available</small></div>
+      </aside>
+
+      <div className="analytics-page-main">
+        <header className="analytics-topbar">
+          <div>
+            <span className="card-kicker">TRACKEN INTELLIGENCE</span>
+            <h1>Know what is moving.</h1>
+            <p>Your personal progress system, translated into decisions you can act on.</p>
+          </div>
+          <div className="analytics-top-actions">
+            <button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode">{theme === "light" ? <Moon size={17}/> : <Sun size={17}/>} <span>{theme === "light" ? "Dark mode" : "Light mode"}</span></button>
+            <button className="secondary-cta compact-cta" onClick={onBack}>Dashboard <ArrowRight size={16}/></button>
+          </div>
+        </header>
+
+        <main className="analytics-content intelligence-content">
+          <section className="intelligence-hero">
+            <div><span className="card-kicker">PERSONAL OPERATING SIGNAL</span><h2>{avg || completion || habitRate ? `Your system is ${Math.max(avg, completion, habitRate)}% active.` : "Your system is ready."}</h2><p>{primaryInsight}</p><button className="primary-small" onClick={onBack}>{primaryAction} <ArrowRight size={15}/></button></div>
+            <div className="intelligence-orbit"><Sparkles size={24}/><strong>{Math.max(0, Math.min(100, Math.round((avg * .35) + (completion * .3) + (habitRate * .2) + (Math.min(focusSessions, 10) * 1.5))))}</strong><span>system health</span></div>
+          </section>
+
+          <section className="analytics-range-bar">
+            <div><span className="card-kicker">PERFORMANCE WINDOW</span><h2>What changed</h2></div>
+            <div className="range-switch">{[7, 30].map(n => <button key={n} className={range === n ? "active" : ""} onClick={() => setRange(n)}>{n === 7 ? "Last 7 days" : "Last 30 days"}</button>)}</div>
+          </section>
+
+          <section className="intelligence-signal-grid">
+            {dataSignals.map(({ icon: Icon, label, value, meta, tone }) => <article key={label} className={`intelligence-signal ${tone}`}><div className="intelligence-signal-icon"><Icon size={18}/></div><span>{label}</span><strong>{value}</strong><small>{meta}</small></article>)}
+            {!dataSignals.length && <article className="intelligence-signal empty"><Sparkles size={18}/><span>BUILD YOUR SIGNAL</span><strong>0 data points</strong><small>Start tracking to unlock personal intelligence.</small></article>}
+          </section>
+
+          <section className="analytics-stat-grid">
+            <AnalyticsStat icon={Clock3} label="Study time" value={formatMinutes(minutes)} meta={`${formatMinutes(monthMinutes)} this month`}/>
+            <AnalyticsStat icon={BookOpen} label="Questions solved" value={questions.toLocaleString()} meta={`${monthQuestions.toLocaleString()} this month`}/>
+            <AnalyticsStat icon={ClipboardCheck} label="Tasks completed" value={`${doneTasks}/${plannedTasks.length}`} meta={`${completion}% completion`}/>
+            <AnalyticsStat icon={TrendingUp} label="Average score" value={`${avg}%`} meta={`${scoreChange >= 0 ? "+" : ""}${scoreChange} pts vs previous`}/>
+            <AnalyticsStat icon={Flame} label="Active days" value={activeDays} meta={`${range} day window`}/>
+            <AnalyticsStat icon={Timer} label="Focus sessions" value={focusSessions} meta={`${focusHours}h accumulated focus`}/>
+          </section>
+
+          <section className="analytics-main-grid">
+            <article className="analytics-panel analytics-chart-panel">
+              <div className="analytics-panel-head"><div><span className="card-kicker">STUDY TIME</span><h2>Daily rhythm</h2><p>See whether your effort is becoming repeatable.</p></div><strong>{formatMinutes(minutes)}</strong></div>
+              <div className="analytics-bar-chart">{daily.map(d => <button key={d.key} className="analytics-bar-item" title={`${formatDay(d.date)} · ${formatMinutes(d.minutes)}`}><div className="analytics-bar-track"><i style={{ height: `${Math.max(d.minutes ? 6 : 2, (d.minutes / maxMinutes) * 100)}%` }}/></div><span>{d.date.toLocaleDateString("en-US", { weekday: "short" }).slice(0, 2)}</span><small>{d.minutes ? `${Math.round(d.minutes / 60 * 10) / 10}h` : "—"}</small></button>)}</div>
+            </article>
+            <article className="analytics-panel score-panel">
+              <div className="analytics-panel-head"><div><span className="card-kicker">MOMENTUM</span><h2>Is the curve improving?</h2><p>Compare this window with the immediately previous one.</p></div><div className={`intelligence-change ${scoreChange >= 0 ? "up" : "down"}`}>{scoreChange >= 0 ? "↑" : "↓"} {Math.abs(scoreChange)} pts</div></div>
+              <div className="comparison-list"><div><span>Study time</span><b>{formatMinutes(minutes)}</b><small>{studyChange >= 0 ? "+" : ""}{studyChange}%</small></div><div><span>Task completion</span><b>{completion}%</b><small>{taskChange >= 0 ? "+" : ""}{taskChange}%</small></div><div><span>Average score</span><b>{avg}%</b><small>{scoreChange >= 0 ? "+" : ""}{scoreChange} pts</small></div></div>
+            </article>
+          </section>
+
+          <section className="analytics-main-grid">
+            <article className="analytics-panel breakdown-analytics-panel"><div className="analytics-panel-head"><div><span className="card-kicker">PROGRESS MIX</span><h2>Where your effort goes</h2><p>The measurable inputs behind your current window.</p></div><PieChart size={22}/></div><div className="analytics-breakdown-list"><AnalyticsBreakdown icon={BookOpen} label="Lectures watched" value={lectures} unit="lectures" percent={Math.min(100, lectures * 5)}/><AnalyticsBreakdown icon={Timer} label="Lecture duration" value={formatMinutes(minutes)} unit="logged" percent={Math.min(100, minutes / 3)}/><AnalyticsBreakdown icon={HelpCircle} label="Questions solved" value={questions.toLocaleString()} unit="questions" percent={Math.min(100, questions / 1.5)}/><AnalyticsBreakdown icon={BookOpen} label="Pages read" value={pages.toLocaleString()} unit="pages" percent={Math.min(100, pages * 2)}/></div></article>
+            <article className="analytics-panel best-day-panel"><div className="analytics-panel-head"><div><span className="card-kicker">BEST DAY</span><h2>Your strongest session</h2><p>The day with the most lecture time in this window.</p></div><Award size={22}/></div><div className="best-day-card"><strong>{bestDay?.minutes ? formatMinutes(bestDay.minutes) : "No study time yet"}</strong><span>{bestDay?.minutes ? formatDay(bestDay.date) : "Save a study record to reveal it"}</span>{bestDay?.minutes ? <div><b>{bestDay.questions}</b> questions <b>{bestDay.pages}</b> pages <b>{bestDay.score}%</b> score</div> : null}</div></article>
+          </section>
+
+          <section className="analytics-panel goal-performance-panel"><div className="analytics-panel-head"><div><span className="card-kicker">GOAL PERFORMANCE</span><h2>Effort → destination</h2><p>Connect the work you log to the outcomes you said matter.</p></div><Target size={22}/></div>{goalRows.length ? <div className="analytics-goal-list">{goalRows.map(g => <article className="analytics-goal-row" key={g.id}><div className="analytics-goal-title"><span>{g.category || "Goal"}</span><h3>{g.title}</h3></div><div className="analytics-goal-progress"><div><span>Goal progress</span><strong>{g.progress}%</strong></div><div className="goal-progress-track"><i style={{ width: `${g.progress}%` }}/></div></div><div className="analytics-goal-meta"><b>{g.current_value || 0}</b> {g.unit || "progress"} <span>•</span><b>{g.done}/{g.linked}</b> tasks</div></article>)}</div> : <div className="analytics-empty"><Target size={25}/><h3>No active goals yet</h3><p>Create a goal and TRACKEN will connect execution to the destination.</p></div>}</section>
+
+          <section className="intelligence-finance-grid">
+            <article className="analytics-panel"><div className="analytics-panel-head"><div><span className="card-kicker">FINANCIAL SIGNAL</span><h2>Money at a glance</h2><p>Recorded values only — no bank assumptions.</p></div><WalletCards size={22}/></div><div className="finance-signal-grid"><div><span>Income</span><strong>₹{totalIncome.toLocaleString("en-IN")}</strong></div><div><span>Expenses</span><strong>₹{totalExpense.toLocaleString("en-IN")}</strong></div><div><span>Portfolio</span><strong>₹{portfolio.toLocaleString("en-IN")}</strong></div><div><span>Cash flow</span><strong className={moneyBalance >= 0 ? "positive" : "negative"}>₹{moneyBalance.toLocaleString("en-IN")}</strong></div></div></article>
+            <article className="analytics-panel"><div className="analytics-panel-head"><div><span className="card-kicker">RECENT SIGNALS</span><h2>What you've been doing</h2><p>Recent activity captured by TRACKEN.</p></div><Activity size={22}/></div><div className="recent-signal-list">{activityLog.slice(-6).reverse().map(item => <div key={item.id}><span>{new Date(item.at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span><b>{item.label}</b><small>{item.type.replaceAll("_", " ")}</small></div>)}{!activityLog.length && <div className="analytics-empty"><Activity size={22}/><p>Your recent activity will appear here.</p></div>}</div></article>
+          </section>
+
+          <section className="analytics-panel lifetime-panel"><div className="analytics-panel-head"><div><span className="card-kicker">ALL-TIME SNAPSHOT</span><h2>Your accumulated footprint</h2><p>Everything TRACKEN has recorded for this account.</p></div><Sparkles size={22}/></div><div className="lifetime-grid"><div><span>Total study time</span><strong>{formatMinutes(totalMinutes)}</strong></div><div><span>Total questions</span><strong>{totalQuestions.toLocaleString()}</strong></div><div><span>Total pages</span><strong>{totalPages.toLocaleString()}</strong></div><div><span>Total lectures</span><strong>{totalLectures.toLocaleString()}</strong></div></div><div className="analytics-footnote">{records[0]?.record_date ? `Tracking since ${formatDay(new Date(`${records[0].record_date}T12:00:00`))}. The more consistently you record, the stronger your insights become.` : "Your intelligence layer will grow automatically as you save activity."}</div></section>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function Activity({size=22}) { return <ClipboardList size={size}/>; }
+
+function AnalyticsStat({icon:Icon,label,value,meta}) {
+  return <article className="analytics-stat"><div className="analytics-stat-icon"><Icon size={20}/></div><span>{label}</span><strong>{value}</strong><small>{meta}</small></article>;
+}
+function AnalyticsProgress({label,value}) {
+  const safe=Math.max(0,Math.min(100,Number(value)||0));
+  return <div className="analytics-progress-row"><div><span>{label}</span><strong>{safe}%</strong></div><div className="analytics-progress-track"><i style={{width:`${safe}%`}}/></div></div>;
+}
+function AnalyticsBreakdown({icon:Icon,label,value,unit,percent}) {
+  const safe=Math.max(2,Math.min(100,Number(percent)||0));
+  return <div className="analytics-breakdown-row"><div className="analytics-breakdown-icon"><Icon size={17}/></div><div className="analytics-breakdown-copy"><div><span>{label}</span><strong>{value}</strong></div><small>{unit}</small><div className="analytics-mini-track"><i style={{width:`${safe}%`}}/></div></div></div>;
+}
+
+function getDaysLeft(date) {
+  if (!date) return "—";
+  return Math.max(0, Math.ceil((new Date(`${date}T23:59:59`) - new Date()) / 86400000));
+}
+
+function StatCard({ icon: Icon, label, value, meta, progress, accent }) {
+  return <article className={`command-stat-card ${accent ? "accent" : ""}`}><div className="stat-icon"><Icon size={19} /></div><span>{label}</span><strong>{value}</strong>{progress !== undefined ? <div className="stat-progress"><i style={{ width: `${progress}%` }}></i></div> : null}<small>{meta}</small></article>;
+}
+
+function BreakdownItem({ label, value, unit }) {
+  return <div className="breakdown-item"><span><i></i>{label}</span><strong>{value}</strong><small>{unit}</small></div>;
+}
+
+function Achievement({ icon, title, unlocked }) {
+  return <div className={`achievement ${unlocked ? "unlocked" : "locked"}`}><span>{unlocked ? icon : "○"}</span><div><strong>{title}</strong><small>{unlocked ? "Unlocked" : "Keep going"}</small></div></div>;
+}
+
+
+
+const UPDATE_TYPES = ["Notice", "Announcement", "Important", "General"];
+
+function UpdatesPage({ session, theme, toggleTheme, onBack, onUnreadChange = () => {} }) {
+  const userId = session.user.id;
+  const [updates, setUpdates] = useState([]);
+  const [readIds, setReadIds] = useState(new Set());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadUpdates = async () => {
+    setLoading(true); setError("");
+    const [updatesRes, readsRes] = await Promise.all([
+      supabase.from("updates").select("*").or(`recipient_user_id.is.null,recipient_user_id.eq.${userId}`).order("created_at", { ascending: false }),
+      supabase.from("update_reads").select("update_id").eq("user_id", userId)
+    ]);
+    if (updatesRes.error) setError(updatesRes.error.message);
+    else setUpdates(updatesRes.data || []);
+    if (readsRes.error) setError(readsRes.error.message);
+    else setReadIds(new Set((readsRes.data || []).map((item) => item.update_id)));
+    setLoading(false);
+  };
+
+  useEffect(() => { loadUpdates(); }, [userId]);
+
+  const unread = updates.filter((item) => !readIds.has(item.id));
+
+  useEffect(() => { onUnreadChange(unread.length); }, [unread.length]);
+
+  const markRead = async (updateId) => {
+    if (readIds.has(updateId)) return;
+    const { error: readError } = await supabase.from("update_reads").upsert({ update_id: updateId, user_id: userId, read_at: new Date().toISOString() }, { onConflict: "update_id,user_id" });
+    if (readError) return setError(readError.message);
+    setReadIds((current) => new Set([...current, updateId]));
+  };
+
+  const markAllRead = async () => {
+    if (!unread.length) return;
+    const rows = unread.map((item) => ({ update_id: item.id, user_id: userId, read_at: new Date().toISOString() }));
+    const { error: readError } = await supabase.from("update_reads").upsert(rows, { onConflict: "update_id,user_id" });
+    if (readError) return setError(readError.message);
+    setReadIds(new Set([...readIds, ...unread.map((item) => item.id)]));
+  };
+
+  return (
+    <div className="subpage-shell tasken-app-shell">
+      <aside className="subpage-side-rail"><button className="back-link" onClick={onBack}><ArrowLeft size={16} /> Back to dashboard</button><div className="subpage-brand"><div className="brand">TRACKEN<span>.</span></div><span>UPDATES</span></div><div className="subpage-side-note"><Bell size={20} /><strong>Stay in the loop.</strong><p>Official notices and important messages from TRACKEN appear here.</p></div></aside>
+      <div className="subpage-main">
+        <header className="subpage-topbar"><div><span className="card-kicker">TRACKEN UPDATES</span><h1>Updates & notices</h1></div><div className="subpage-actions"><button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode"><Moon size={17} /><span>{theme === "light" ? "Dark mode" : "Light mode"}</span></button><button className="secondary-cta compact-cta" onClick={onBack}>Dashboard <ArrowRight size={16} /></button></div></header>
+        <main className="subpage-content">
+          {error && <div className="dashboard-error">{error}</div>}
+          <section className="updates-hero"><div><span className="eyebrow"><span></span> YOUR INBOX</span><h2>{unread.length ? `${unread.length} new ${unread.length === 1 ? "message" : "messages"}.` : "You're all caught up."}</h2><p>Important information from the TRACKEN team, kept in one clear place.</p></div><button className="primary-cta compact-cta" onClick={markAllRead} disabled={!unread.length}><CheckCheck size={16} /> Mark all read</button></section>
+          <section className="updates-list">
+            {loading ? <div className="updates-empty"><Bell size={26} /><h3>Loading updates…</h3></div> : updates.length ? updates.map((item) => {
+              const unreadItem = !readIds.has(item.id);
+              return <article key={item.id} className={`update-card ${unreadItem ? "unread" : ""}`} onClick={() => markRead(item.id)}><div className={`update-type ${String(item.type || "General").toLowerCase()}`}><Megaphone size={18} /></div><div className="update-body"><div className="update-meta"><span>{item.type || "General"}</span><time>{new Date(item.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time>{unreadItem && <b>NEW</b>}</div><h3>{item.title}</h3><p>{item.message}</p><small>{item.recipient_user_id ? "Direct message" : "For all TRACKEN users"}</small></div>{unreadItem && <span className="unread-dot" />}</article>;
+            }) : <div className="updates-empty"><Bell size={26} /><h3>No updates yet</h3><p>When TRACKEN has something important to share, you'll find it here.</p></div>}
+          </section>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+
+function AdminPage({ session, theme, toggleTheme, onBack }) {
+  const [users, setUsers] = useState([]);
+  const [records, setRecords] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [goals, setGoals] = useState([]);
+  const [profile, setProfile] = useState(emptyProfile);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [target, setTarget] = useState("all");
+  const [type, setType] = useState("Notice");
+  const [title, setTitle] = useState("");
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [sentHistory, setSentHistory] = useState([]);
+  const [search, setSearch] = useState("");
+  const [blogPosts, setBlogPosts] = useState([]);
+  const [blogTitle, setBlogTitle] = useState("");
+  const [blogSlug, setBlogSlug] = useState("");
+  const [blogCategory, setBlogCategory] = useState("Productivity");
+  const [blogExcerpt, setBlogExcerpt] = useState("");
+  const [blogContent, setBlogContent] = useState("");
+  const blogContentRef = useRef(null);
+  const [uploadingArticleImage, setUploadingArticleImage] = useState(false);
+  const [selectedArticleImage, setSelectedArticleImage] = useState(null);
+  const [blogReadMinutes, setBlogReadMinutes] = useState(5);
+  const [publishingBlog, setPublishingBlog] = useState(false);
+  const [blogSent, setBlogSent] = useState(false);
+  const [editingUpdateId, setEditingUpdateId] = useState(null);
+  const [updateEdit, setUpdateEdit] = useState({ title:"", message:"", type:"Notice" });
+  const [editingBlogId, setEditingBlogId] = useState(null);
+  const [galleryImages, setGalleryImages] = useState([]);
+  const [galleryFiles, setGalleryFiles] = useState([]);
+  const [galleryCaption, setGalleryCaption] = useState("");
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+
+  const loadAdminData = async () => {
+    setLoading(true); setError("");
+    const [usersRes, recordsRes, tasksRes, goalsRes, historyRes, blogRes, galleryRes] = await Promise.all([
+      supabase.rpc("admin_list_users"),
+      supabase.from("daily_records").select("*").order("record_date", { ascending: false }).limit(5000),
+      supabase.from("tasks").select("*").limit(5000),
+      supabase.from("goals").select("*").limit(5000),
+      supabase.from("updates").select("*").order("created_at", { ascending: false }).limit(1000),
+      supabase.from("blog_posts").select("*").order("created_at", { ascending: false }).limit(1000),
+      supabase.from("journal_gallery").select("*").order("created_at", { ascending: false }).limit(500)
+    ]);
+    const firstError = [usersRes, recordsRes, tasksRes, goalsRes, historyRes, blogRes, galleryRes].find((res) => res.error);
+    if (firstError?.error) setError(firstError.error.message);
+    setUsers(usersRes.data || []);
+    setRecords(recordsRes.data || []);
+    setTasks(tasksRes.data || []);
+    setGoals(goalsRes.data || []);
+    setSentHistory((historyRes.data || []).filter((item) => item.created_by === session.user.id));
+    if (blogRes?.data) setBlogPosts(blogRes.data);
+    if (galleryRes?.data) setGalleryImages(galleryRes.data);
+    setLoading(false);
+  };
+
+  useEffect(() => { loadAdminData(); }, []);
+
+  const sendUpdate = async (e) => {
+    e.preventDefault();
+    if (!title.trim() || !message.trim() || sending) return;
+    setSending(true); setError(""); setSent(false);
+    const { data, error: sendError } = await supabase.from("updates").insert({ title: title.trim(), message: message.trim(), type, recipient_user_id: target === "all" ? null : target, created_by: session.user.id }).select().single();
+    setSending(false);
+    if (sendError) return setError(sendError.message);
+    setSentHistory((current) => [{
+      id: data?.id || `local-${Date.now()}`,
+      title: title.trim(),
+      message: message.trim(),
+      type,
+      recipient_user_id: target === "all" ? null : target,
+      created_by: session.user.id,
+      created_at: new Date().toISOString()
+    }, ...current]);
+    setTitle(""); setMessage(""); setSent(true);
+    setTimeout(() => setSent(false), 3500);
+  };
+
+  const startEditUpdate = (item) => { setEditingUpdateId(item.id); setUpdateEdit({title:item.title||"", message:item.message||"", type:item.type||"Notice"}); };
+  const cancelEditUpdate = () => { setEditingUpdateId(null); setUpdateEdit({title:"", message:"", type:"Notice"}); };
+  const saveUpdateEdit = async () => {
+    if(!editingUpdateId || !updateEdit.title.trim() || !updateEdit.message.trim()) return;
+    const {data,error:editError}=await supabase.from("updates").update({title:updateEdit.title.trim(),message:updateEdit.message.trim(),type:updateEdit.type}).eq("id",editingUpdateId).select().single();
+    if(editError){setError(editError.message);return;}
+    setSentHistory(current=>current.map(item=>item.id===editingUpdateId?data:item)); cancelEditUpdate();
+  };
+  const deleteUpdate = async (id) => {
+    if(!window.confirm("Delete this update? This cannot be undone.")) return;
+    const {error:deleteError}=await supabase.from("updates").delete().eq("id",id);
+    if(deleteError){setError(deleteError.message);return;}
+    setSentHistory(current=>current.filter(item=>item.id!==id));
+  };
+
+  const startEditBlog = (post) => { setEditingBlogId(post.id); setBlogTitle(post.title||""); setBlogSlug(post.slug||""); setBlogCategory(post.category||"Productivity"); setBlogExcerpt(post.excerpt||""); setBlogContent(post.content||""); setBlogReadMinutes(post.read_minutes||5); };
+  const cancelEditBlog = () => { setEditingBlogId(null); setBlogTitle(""); setBlogSlug(""); setBlogCategory("Productivity"); setBlogExcerpt(""); setBlogContent(""); setBlogReadMinutes(5); setSelectedArticleImage(null); };
+  useEffect(()=>{
+    if(blogContentRef.current && blogContentRef.current.innerHTML !== normalizeArticleHtml(blogContent)) blogContentRef.current.innerHTML = normalizeArticleHtml(blogContent);
+  },[editingBlogId]);
+
+  const deleteBlog = async (id) => {
+    if(!window.confirm("Delete this article? This cannot be undone.")) return;
+    if(String(id).startsWith("local-")){ const next=blogPosts.filter(post=>post.id!==id); setBlogPosts(next); localStorage.setItem("tasken-blog-posts",JSON.stringify(next)); return; }
+    const {error:deleteError}=await supabase.from("blog_posts").delete().eq("id",id);
+    if(deleteError){setError(deleteError.message);return;}
+    setBlogPosts(current=>current.filter(post=>post.id!==id));
+  };
+
+  const insertArticleImageAtRange = (editor, range, src, alt = "Article image") => {
+    const image = document.createElement("img");
+    image.src = src;
+    image.alt = alt;
+    image.loading = "lazy";
+    image.style.width = "100%";
+    image.style.height = "auto";
+    image.style.maxWidth = "100%";
+
+    // Insert the image exactly at the saved cursor position. Then create a
+    // dedicated paragraph after it so typing always continues BELOW the image
+    // instead of jumping back to the start of the editor.
+    range.deleteContents();
+    range.insertNode(image);
+
+    const paragraph = document.createElement("p");
+    paragraph.appendChild(document.createElement("br"));
+    const imageParent = image.parentElement;
+    if (imageParent && imageParent.tagName === "P") imageParent.insertAdjacentElement("afterend", paragraph);
+    else if (imageParent) imageParent.insertBefore(paragraph, image.nextSibling);
+    else editor.appendChild(paragraph);
+
+    const caret = document.createRange();
+    caret.selectNodeContents(paragraph);
+    caret.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(caret);
+
+    setSelectedArticleImage(image);
+    setBlogContent(editor.innerHTML);
+  };
+
+  const getEditorRange = () => {
+    const editor = blogContentRef.current;
+    const selection = window.getSelection();
+    if (editor && selection?.rangeCount) {
+      const range = selection.getRangeAt(0);
+      if (editor.contains(range.commonAncestorContainer)) return range.cloneRange();
+    }
+    if (editor) {
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      return range;
+    }
+    return null;
+  };
+
+  const uploadArticleImage = async (file, savedRange = null) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    if (file.size > 10 * 1024 * 1024) { setError("Article images must be 10 MB or smaller."); return; }
+    setUploadingArticleImage(true); setError("");
+    try {
+      const ext=(file.name.split(".").pop()||"png").toLowerCase();
+      const path=`${session.user.id}/${Date.now()}-${Math.random().toString(36).slice(2,9)}.${ext}`;
+      const {error:uploadError}=await supabase.storage.from("journal-article").upload(path,file,{cacheControl:"3600",upsert:false,contentType:file.type});
+      if(uploadError) throw uploadError;
+      const {data}=supabase.storage.from("journal-article").getPublicUrl(path);
+      const editor=blogContentRef.current;
+      if(!editor || !data?.publicUrl) throw new Error("Article editor or image URL is unavailable.");
+      editor.focus();
+      const range = savedRange && editor.contains(savedRange.commonAncestorContainer) ? savedRange : getEditorRange();
+      if(!range) throw new Error("Could not place the image in the article.");
+      insertArticleImageAtRange(editor, range, data.publicUrl, file.name || "Article image");
+    } catch(err) { setError(`Article image upload failed: ${err?.message||"Please try again."}`); }
+    finally { setUploadingArticleImage(false); }
+  };
+
+  const handleArticleEditorClick = (e) => {
+    const target = e.target;
+    if (target?.tagName === "IMG") {
+      setSelectedArticleImage(target);
+      return;
+    }
+    setSelectedArticleImage(null);
+  };
+
+  const resizeSelectedArticleImage = (percent) => {
+    const editor = blogContentRef.current;
+    if (!editor || !selectedArticleImage || !editor.contains(selectedArticleImage)) return;
+    const width = Math.min(100, Math.max(10, Number(percent) || 100));
+    selectedArticleImage.style.width = `${width}%`;
+    selectedArticleImage.style.height = "auto";
+    selectedArticleImage.style.maxWidth = "100%";
+    setBlogContent(editor.innerHTML);
+  };
+
+  const handleArticlePaste = async (e) => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const imageItem = items.find(item => item.type.startsWith("image/"));
+    const editor = blogContentRef.current;
+    const savedRange = getEditorRange();
+    if (imageItem) {
+      e.preventDefault();
+      await uploadArticleImage(imageItem.getAsFile(), savedRange);
+      return;
+    }
+
+    // Also support copying an image from a web page where the clipboard
+    // provides HTML instead of an image File.
+    const html = e.clipboardData?.getData("text/html") || "";
+    const match = html.match(/<img[^>]+src=["'](https?:\/\/[^"']+)["'][^>]*>/i);
+    if (match && editor && savedRange) {
+      e.preventDefault();
+      insertArticleImageAtRange(editor, savedRange, match[1], "Article image");
+    }
+  };
+
+  const publishBlog = async (e) => {
+    e.preventDefault();
+    if (!blogTitle.trim() || !blogExcerpt.trim() || !blogContent.trim() || publishingBlog) return;
+    setPublishingBlog(true); setError(""); setBlogSent(false);
+    const slug = blogSlug.trim() || blogTitle.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");
+    const payload = { title: blogTitle.trim(), slug, category: blogCategory, excerpt: blogExcerpt.trim(), content: blogContent.trim(), read_minutes: Number(blogReadMinutes)||5, published: true, published_at: new Date().toISOString(), created_by: session.user.id };
+    if(editingBlogId){
+      if(String(editingBlogId).startsWith("local-")){ const next=blogPosts.map(post=>post.id===editingBlogId?{...post,...payload}:post); setBlogPosts(next); localStorage.setItem("tasken-blog-posts",JSON.stringify(next)); }
+      else { const {data,error:blogError}=await supabase.from("blog_posts").update(payload).eq("id",editingBlogId).select().single(); if(blogError){setError(blogError.message);setPublishingBlog(false);return;} setBlogPosts(current=>current.map(post=>post.id===editingBlogId?data:post)); }
+    } else {
+      const { data, error: blogError } = await supabase.from("blog_posts").insert(payload).select().single();
+      if (blogError) { const localPost={...payload,id:`local-${Date.now()}`}; const next=[localPost,...blogPosts]; setBlogPosts(next); localStorage.setItem("tasken-blog-posts",JSON.stringify(next)); setError(`Blog saved locally. Run the blog migration SQL to publish it to Supabase: ${blogError.message}`); }
+      else { const next=[data,...blogPosts]; setBlogPosts(next); localStorage.setItem("tasken-blog-posts",JSON.stringify(next)); }
+    }
+    cancelEditBlog(); setPublishingBlog(false); setBlogSent(true); setTimeout(()=>setBlogSent(false),3500);
+  };
+
+  const uploadGalleryImage = async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    if (!galleryFiles.length || uploadingGallery) return;
+    setUploadingGallery(true); setError("");
+    const results = [];
+    const failed = [];
+    try {
+      for (const file of galleryFiles) {
+        try {
+          if (!file.type.startsWith("image/")) throw new Error("not an image file");
+          if (file.size > 10 * 1024 * 1024) throw new Error("larger than 10 MB");
+          const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+          const path = `${session.user.id}/${Date.now()}-${Math.random().toString(36).slice(2,9)}-${Math.random().toString(36).slice(2,6)}.${ext}`;
+          const { error: uploadError } = await supabase.storage.from("journal-gallery").upload(path, file, { cacheControl:"3600", upsert:false, contentType:file.type });
+          if (uploadError) throw uploadError;
+          const { data: publicData } = supabase.storage.from("journal-gallery").getPublicUrl(path);
+          if (!publicData?.publicUrl) throw new Error("could not create a public image URL");
+          const { data, error: insertError } = await supabase.from("journal_gallery").insert({ image_url:publicData.publicUrl, storage_path:path, caption:galleryCaption.trim(), alt_text:galleryCaption.trim() || file.name, created_by:session.user.id }).select().single();
+          if (insertError) {
+            await supabase.storage.from("journal-gallery").remove([path]);
+            throw insertError;
+          }
+          results.push(data);
+        } catch (fileError) {
+          failed.push(`${file.name}: ${fileError?.message || "upload failed"}`);
+        }
+      }
+      if (results.length) setGalleryImages(current => [...results, ...current]);
+      if (failed.length) setError(`${results.length} uploaded. ${failed.length} failed — ${failed.slice(0,3).join(" | ")}`);
+      if (results.length === galleryFiles.length) {
+        setGalleryFiles([]); setGalleryCaption("");
+        if (form) form.reset();
+      } else {
+        const failedNames = new Set(failed.map(item => item.split(":")[0]));
+        setGalleryFiles(current => current.filter(file => failedNames.has(file.name)));
+      }
+    } catch (err) {
+      setError(`Gallery upload failed: ${err?.message || "Please try again."}`);
+    } finally { setUploadingGallery(false); }
+  };
+  const deleteGalleryImage = async (item) => {
+    if(!window.confirm("Delete this gallery image?")) return;
+    const {error:deleteError}=await supabase.from("journal_gallery").delete().eq("id",item.id);
+    if(deleteError){setError(deleteError.message);return;}
+    if(item.storage_path) await supabase.storage.from("journal-gallery").remove([item.storage_path]);
+    setGalleryImages(current=>current.filter(x=>x.id!==item.id));
+  };
+
+  const filteredUsers = users.filter((user) => `${user.username || ""} ${user.full_name || ""} ${user.email || ""}`.toLowerCase().includes(search.toLowerCase()));
+  const totalStudyMinutes = records.reduce((sum, item) => sum + Number(item.lecture_minutes || 0), 0);
+  const totalQuestions = records.reduce((sum, item) => sum + Number(item.questions_done || 0), 0);
+  const activeGoals = goals.filter((goal) => goal.status === "active").length;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const activeToday = new Set(records.filter((r) => r.record_date === todayKey).map((r) => r.user_id)).size;
+
+  const userSummary = (userId) => {
+    const userRecords = records.filter((r) => r.user_id === userId);
+    const userTasks = tasks.filter((t) => t.user_id === userId);
+    const userGoals = goals.filter((g) => g.user_id === userId && g.status === "active");
+    const minutes = userRecords.reduce((sum, r) => sum + Number(r.lecture_minutes || 0), 0);
+    const questions = userRecords.reduce((sum, r) => sum + Number(r.questions_done || 0), 0);
+    const completed = userTasks.filter((t) => t.status === "completed").length;
+    return { days: userRecords.length, hours: `${Math.floor(minutes / 60)}h ${minutes % 60}m`, questions, completed, goals: userGoals.length };
+  };
+
+  return (
+    <div className="subpage-shell tasken-app-shell admin-page-shell">
+      <aside className="subpage-side-rail admin-rail"><button className="back-link" onClick={onBack}><ArrowLeft size={16} /> Back to dashboard</button><div className="subpage-brand"><div className="brand">TRACKEN<span>.</span></div><span>ADMIN CENTER</span></div><div className="subpage-side-note admin-note"><ShieldCheck size={20} /><strong>Owner controls.</strong><p>Send official updates and review platform-wide study activity.</p></div></aside>
+      <div className="subpage-main">
+        <header className="subpage-topbar"><div><span className="card-kicker">ADMIN CENTER</span><h1>Run TRACKEN.</h1></div><div className="subpage-actions"><button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode"><Moon size={17} /><span>{theme === "light" ? "Dark mode" : "Light mode"}</span></button><button className="secondary-cta compact-cta" onClick={onBack}>Dashboard <ArrowRight size={16} /></button></div></header>
+        <main className="subpage-content">
+          {error && <div className="dashboard-error">{error}</div>}
+          <section className="admin-stat-grid"><AdminStat icon={Users} label="Registered accounts" value={users.length} meta={`${activeToday} active today`} /><AdminStat icon={Clock3} label="Total study time" value={`${Math.floor(totalStudyMinutes / 60)}h`} meta={`${totalStudyMinutes % 60}m extra`} /><AdminStat icon={BookOpen} label="Questions solved" value={totalQuestions.toLocaleString()} meta="Across saved records" /><AdminStat icon={Target} label="Active goals" value={activeGoals} meta="Currently in progress" /></section>
+          <section className="admin-layout-grid">
+            <article className="admin-panel send-panel"><div className="panel-head"><div><span className="card-kicker">BROADCAST</span><h2>Send an update</h2><p>Publish a message to everyone or one account.</p></div><Send size={21} /></div><form className="admin-send-form" onSubmit={sendUpdate}><label><span>Audience</span><select value={target} onChange={(e) => setTarget(e.target.value)}><option value="all">Everyone — all registered accounts</option>{users.map((user) => <option key={user.id} value={user.id}>{user.username || user.full_name || "Unnamed candidate"} · {user.email || user.id.slice(0, 8)}</option>)}</select></label><label><span>Message type</span><select value={type} onChange={(e) => setType(e.target.value)}>{UPDATE_TYPES.map((item) => <option key={item}>{item}</option>)}</select></label><label><span>Title</span><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. New TRACKEN update" /></label><label><span>Message</span><textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Write the message your users should see…" /></label><div className="admin-send-footer">{sent ? <span className="success-note"><CheckCircle2 size={15} /> Update sent successfully.</span> : <span>Recipients will see a highlighted notification in Updates.</span>}<button className="primary-cta compact-cta" disabled={sending || !title.trim() || !message.trim()}>{sending ? "Sending…" : "Send update"} <ArrowRight size={16} /></button></div></form></article>
+            <article className="admin-panel users-panel"><div className="panel-head"><div><span className="card-kicker">CANDIDATES</span><h2>Registered accounts</h2><p>Search users and review their summary.</p></div><Users size={21} /></div><div className="admin-search"><Search size={16} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search accounts…" /></div>{loading ? <div className="admin-empty">Loading accounts…</div> : <div className="admin-user-list">{filteredUsers.map((user) => { const summary = userSummary(user.id); return <div className="admin-user-row" key={user.id}><div className="admin-user-avatar">{(user.username || user.full_name || user.email || "U").charAt(0).toUpperCase()}</div><div className="admin-user-main"><strong>{user.username || user.full_name || "Unnamed candidate"}</strong><small>{user.email || user.id}</small></div><div className="admin-user-stats"><span><b>{summary.days}</b> days</span><span><b>{summary.hours}</b> study</span><span><b>{summary.questions}</b> Q</span><span><b>{summary.completed}</b> tasks</span><span><b>{summary.goals}</b> goals</span><label className="admin-badge-control"><small>Badge</small><select value={user.badge || ""} onChange={async e=>{const badge=e.target.value||null; const {data,error}=await supabase.rpc("admin_set_user_badge",{target_user_id:user.id,new_badge:badge}); if(error){setError(error.message);return;} setUsers(current=>current.map(u=>u.id===user.id?{...u,badge:data}:u));}}><option value="">None</option><option value="Perfect">Perfect</option><option value="Smart">Smart</option><option value="Runner">Runner</option></select></label></div></div>; })}{!filteredUsers.length && <div className="admin-empty">No accounts match your search.</div>}</div>}</article>
+          </section>
+
+          <section className="admin-panel admin-history-panel">
+            <div className="panel-head">
+              <div>
+                <span className="card-kicker">MESSAGE HISTORY</span>
+                <h2>Sent updates</h2>
+                <p>A complete record of every update you have sent from the Admin Center.</p>
+              </div>
+              <Bell size={21} />
+            </div>
+            <div className="admin-history-list">
+              {sentHistory.length ? sentHistory.map((item) => {
+                const recipient = item.recipient_user_id
+                  ? (users.find((user) => user.id === item.recipient_user_id)?.email || "Selected account")
+                  : "All registered accounts";
+                return editingUpdateId===item.id ? (
+                  <article className="admin-history-row admin-edit-row" key={item.id}>
+                    <div className="admin-history-icon"><PenLine size={17} /></div>
+                    <div className="admin-history-main">
+                      <div className="admin-inline-form"><select value={updateEdit.type} onChange={e=>setUpdateEdit({...updateEdit,type:e.target.value})}>{UPDATE_TYPES.map(x=><option key={x}>{x}</option>)}</select><input value={updateEdit.title} onChange={e=>setUpdateEdit({...updateEdit,title:e.target.value})}/><textarea value={updateEdit.message} onChange={e=>setUpdateEdit({...updateEdit,message:e.target.value})}/><div className="admin-inline-actions"><button className="primary-small" onClick={saveUpdateEdit}>Save changes</button><button className="ghost-small" onClick={cancelEditUpdate}>Cancel</button></div></div>
+                    </div>
+                  </article>
+                ) : (
+                  <article className="admin-history-row" key={item.id}>
+                    <div className="admin-history-icon"><Megaphone size={17} /></div>
+                    <div className="admin-history-main">
+                      <div className="admin-history-top"><span>{item.type || "Notice"}</span><time>{new Date(item.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</time></div>
+                      <h3>{item.title}</h3><p>{item.message}</p><small>Sent to <strong>{recipient}</strong></small>
+                    </div>
+                    <div className="admin-row-actions"><button className="ghost-small" onClick={()=>startEditUpdate(item)} title="Edit update"><PenLine size={14}/> Edit</button><button className="danger-small" onClick={()=>deleteUpdate(item.id)} title="Delete update"><Trash2 size={14}/> Delete</button></div>
+                  </article>
+                );
+              }) : (
+                <div className="admin-history-empty">
+                  <Send size={24} />
+                  <h3>No messages sent yet</h3>
+                  <p>Every update you publish will appear here for your records.</p>
+                </div>
+              )}
+            </div>
+          </section>
+          <section className="admin-panel blog-admin-panel">
+             <div className="panel-head"><div><span className="card-kicker">BLOG STUDIO</span><h2>{editingBlogId ? "Edit article" : "Write a new article"}</h2><p>Publish a journal entry that appears on the public Blog page.</p></div><PenLine size={21}/></div>
+             <form className="blog-admin-form" onSubmit={publishBlog}><div className="blog-admin-grid"><label><span>Title</span><input value={blogTitle} onChange={(e)=>setBlogTitle(e.target.value)} placeholder="e.g. How to build a study routine that sticks"/></label><label><span>Slug</span><input value={blogSlug} onChange={(e)=>setBlogSlug(e.target.value)} placeholder="optional-url-slug"/></label><label><span>Category</span><select value={blogCategory} onChange={(e)=>setBlogCategory(e.target.value)}><option>Productivity</option><option>Study tips</option><option>Discipline</option><option>Mindset</option><option>Career</option><option>Product Updates</option></select></label><label><span>Read time</span><input type="number" min="1" max="30" value={blogReadMinutes} onChange={(e)=>setBlogReadMinutes(e.target.value)}/></label></div><label><span>Excerpt</span><textarea value={blogExcerpt} onChange={(e)=>setBlogExcerpt(e.target.value)} placeholder="A short description shown on the Blog page…" rows="3"/></label><label className="article-editor-label"><span>Article content <small>{uploadingArticleImage ? "Uploading image…" : "Paste images directly, then click an image to resize it."}</small></span>{selectedArticleImage && <div className="article-image-toolbar" role="toolbar" aria-label="Resize selected image"><strong>Image size</strong><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(25)}>25%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(50)}>50%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(75)}>75%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(100)}>Full</button></div>}<div ref={blogContentRef} className="article-rich-editor" contentEditable suppressContentEditableWarning onInput={e=>setBlogContent(e.currentTarget.innerHTML)} onClick={handleArticleEditorClick} onPaste={handleArticlePaste} dangerouslySetInnerHTML={{__html:normalizeArticleHtml(blogContent)}} data-placeholder="Write your full journal entry here…" /></label><div className="admin-send-footer">{blogSent?<span className="success-note"><CheckCircle2 size={15}/> Article published.</span>:<span>Published articles appear on the public journal.</span>}<button className="primary-cta compact-cta" disabled={publishingBlog||!blogTitle.trim()||!blogExcerpt.trim()||!blogContent.trim()}>{publishingBlog?"Saving…":editingBlogId?"Save article":"Publish article"} <ArrowRight size={16}/></button></div></form><div className="blog-admin-history"><div className="blog-admin-history-head"><span className="card-kicker">PUBLISHED</span><strong>{blogPosts.length} article{blogPosts.length===1?"":"s"}</strong></div>{blogPosts.slice(0,20).map(post=><div className="blog-admin-row" key={post.id||post.slug}><span className="blog-admin-dot"></span><div className="blog-admin-row-copy"><strong>{post.title}</strong><small>{post.category||"Insights"} · {post.published_at?new Date(post.published_at).toLocaleDateString():"Local draft"}</small></div><div className="admin-row-actions"><button className="ghost-small" onClick={()=>startEditBlog(post)}><PenLine size={14}/> Edit</button><button className="danger-small" onClick={()=>deleteBlog(post.id)}><Trash2 size={14}/> Delete</button></div></div>)}</div>
+           </section>
+
+          <section className="admin-panel admin-gallery-panel">
+            <div className="panel-head"><div><span className="card-kicker">JOURNAL GALLERY</span><h2>Build your visual journal.</h2><p>Add multiple images at once. Everything published here appears inside <strong>Gallery of TRACKEN</strong>.</p></div><ImagePlus size={21}/></div>
+            <form className="admin-gallery-upload-premium" onSubmit={uploadGalleryImage}>
+              <label className="admin-gallery-dropzone">
+                <div className="gallery-upload-icon"><UploadCloud size={28}/></div>
+                <strong>{galleryFiles.length ? `${galleryFiles.length} image${galleryFiles.length===1?"":"s"} selected` : "Choose images to publish"}</strong>
+                <span>JPG, PNG, WEBP or GIF · up to 10 MB each · select multiple</span>
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple onChange={e=>setGalleryFiles(Array.from(e.target.files||[]))} />
+              </label>
+              {galleryFiles.length>0 && <div className="gallery-selected-list">{galleryFiles.map(file=><span key={`${file.name}-${file.size}`}>{file.name}</span>)}</div>}
+              <div className="gallery-upload-bottom"><label><span>Shared caption <small>(optional)</small></span><input value={galleryCaption} onChange={e=>setGalleryCaption(e.target.value)} placeholder="e.g. TRACKEN behind the scenes"/></label><button className="primary-cta compact-cta" disabled={!galleryFiles.length||uploadingGallery}>{uploadingGallery?`Uploading ${galleryFiles.length} image${galleryFiles.length===1?"":"s"}…`:`Publish ${galleryFiles.length||""} image${galleryFiles.length===1?"":"s"}`} <ArrowRight size={16}/></button></div>
+            </form>
+            <div className="admin-gallery-grid">{galleryImages.map(item=><article key={item.id}><img src={item.image_url} alt={item.alt_text||"Gallery"}/><div><strong>{item.caption||"TRACKEN Gallery"}</strong><small>{item.created_at?new Date(item.created_at).toLocaleDateString():"Published"}</small></div><button className="danger-small" onClick={()=>deleteGalleryImage(item)}><Trash2 size={14}/> Delete</button></article>)}{!galleryImages.length&&<div className="admin-empty">No gallery images yet.</div>}</div>
+          </section>
+
+          <section className="admin-panel admin-networth-panel">
+            <div className="panel-head"><div><span className="card-kicker">FINANCIAL OVERVIEW</span><h2>User net worth</h2><p>Registered users and the net-worth information they have added to TRACKEN.</p></div><CircleDollarSign size={21}/></div>
+            <div className="admin-networth-list">{loading ? <div className="admin-empty">Loading financial profiles…</div> : users.length ? filteredUsers.map(user=>{ const snap=user.networth_snapshot || {}; const assets=Array.isArray(snap.assets)?snap.assets:[]; const liabilities=Array.isArray(snap.liabilities)?snap.liabilities:[]; const total=Number(snap.networth_total||0); const assetTotal=Number(snap.investments_value||0)+Number(snap.cash_balance||0)+assets.reduce((sum,x)=>sum+Number(x.value||0),0); const liabilityTotal=liabilities.reduce((sum,x)=>sum+Number(x.value||0),0); return <article className="admin-networth-row" key={`nw-${user.id}`}><div className="admin-user-avatar">{(user.username||user.full_name||user.email||"U").charAt(0).toUpperCase()}</div><div className="admin-networth-user"><strong>{user.username||user.full_name||"Unnamed candidate"}</strong><small>{user.email||user.id}</small></div><div className="admin-networth-metrics"><span><small>Net worth</small><b className={total>=0?"positive":"negative"}>₹{total.toLocaleString("en-IN")}</b></span><span><small>Assets</small><b>₹{assetTotal.toLocaleString("en-IN")}</b></span><span><small>Liabilities</small><b>₹{liabilityTotal.toLocaleString("en-IN")}</b></span><span><small>Updated</small><b>{snap.updated_at?new Date(snap.updated_at).toLocaleDateString("en-IN"):"Not added"}</b></span></div></article>}) : <div className="admin-empty">No registered users yet.</div>}</div>
+          </section>
+        </main>
+      </div>
+    </div>
+  );
+}
+function AdminStat({ icon: Icon, label, value, meta }) {
+  return <article className="admin-stat"><div className="stat-icon"><Icon size={19} /></div><span>{label}</span><strong>{value}</strong><small>{meta}</small></article>;
+}
+
+const GOAL_CATEGORIES = ["Academic", "Exam", "Career", "Skill", "Personal", "Other"];
+const GOAL_PRIORITIES = ["low", "medium", "high"];
+
+function InlineGoalsPanel({ session, goals, setGoals, tasks, onError }) {
+  const userId = session.user.id;
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ title:"", category:"Academic", target_date:"", priority:"medium", description:"", target_value:"", current_value:"", unit:"" });
+  const resetForm = () => { setForm({title:"",category:"Academic",target_date:"",priority:"medium",description:"",target_value:"",current_value:"",unit:""}); setEditingId(null); setShowForm(false); };
+  const openEdit = (goal) => { setEditingId(goal.id); setForm({title:goal.title||"",category:goal.category||"Academic",target_date:goal.target_date||"",priority:goal.priority||"medium",description:goal.description||"",target_value:goal.target_value??"",current_value:goal.current_value??"",unit:goal.unit||""}); setShowForm(true); };
+  const saveGoal = async () => {
+    if (!form.title.trim()) return onError("Please give your goal a name.");
+    if (form.target_value !== "" && Number(form.current_value || 0) > Number(form.target_value)) return onError("Current progress cannot be greater than the target.");
+    setSaving(true);
+    const payload={user_id:userId,title:form.title.trim(),category:form.category,target_date:form.target_date||null,priority:form.priority,description:form.description.trim()||null,target_value:form.target_value===""?null:Number(form.target_value),current_value:Number(form.current_value||0),unit:form.unit.trim()||null,status:"active"};
+    const query=editingId ? supabase.from("goals").update(payload).eq("id",editingId).eq("user_id",userId).select().single() : supabase.from("goals").insert(payload).select().single();
+    const {data,error}=await query; setSaving(false); if(error) return onError(error.message);
+    setGoals(current=>editingId?current.map(g=>g.id===editingId?data:g):[data,...current]); resetForm();
+  };
+  const deleteGoal=async(goal)=>{if(!window.confirm(`Delete "${goal.title}"?`))return;const {error}=await supabase.from("goals").delete().eq("id",goal.id).eq("user_id",userId);if(error)return onError(error.message);setGoals(current=>current.filter(g=>g.id!==goal.id));};
+  const completeGoal=async(goal)=>{const nextStatus=goal.status==="completed"?"active":"completed";const {data,error}=await supabase.from("goals").update({status:nextStatus}).eq("id",goal.id).eq("user_id",userId).select().single();if(error)return onError(error.message);setGoals(current=>current.map(g=>g.id===goal.id?data:g));};
+  const statsFor=(goalId)=>{const linked=tasks.filter(t=>String(t.goal_id)===String(goalId));return {total:linked.length,done:linked.filter(t=>t.status==="completed").length};};
+  const progressFor=(goal)=>goal.target_value>0?Math.min(100,Math.round(Number(goal.current_value||0)/Number(goal.target_value)*100)):0;
+  const active=goals.filter(g=>g.status==="active"), completed=goals.filter(g=>g.status==="completed");
+  return <section className="inline-goals-panel">
+    <div className="inline-goals-hero"><div><span className="eyebrow"><span></span> GOAL CENTER</span><h2>Give your work a <em>destination.</em></h2><p>Create, edit and update your goals here. Your tasks can stay connected to the goal without sending you to another page.</p></div><button className="primary-cta goals-inline-add" onClick={()=>{resetForm();setShowForm(true)}}><Plus size={17}/> Add goal</button></div>
+    {showForm&&<article className="tracker-large-card inline-goal-editor"><div className="panel-heading"><div><span className="card-kicker">{editingId?"EDIT GOAL":"NEW GOAL"}</span><h2>{editingId?"Refine the target.":"What are you working toward?"}</h2></div><button className="icon-close" onClick={resetForm}><X size={18}/></button></div><div className="goal-form-grid inline-goal-form"><label><span>Goal name</span><input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="e.g. Crack SSC CGL 2027"/></label><label><span>Category</span><select value={form.category} onChange={e=>setForm({...form,category:e.target.value})}>{GOAL_CATEGORIES.map(x=><option key={x}>{x}</option>)}</select></label><label><span>Target date</span><input type="date" value={form.target_date} onChange={e=>setForm({...form,target_date:e.target.value})}/></label><label><span>Priority</span><select value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})}>{GOAL_PRIORITIES.map(x=><option key={x} value={x}>{x.charAt(0).toUpperCase()+x.slice(1)}</option>)}</select></label><label><span>Target number <small>optional</small></span><input type="number" min="0" value={form.target_value} onChange={e=>setForm({...form,target_value:e.target.value})} placeholder="100"/></label><label><span>Current progress</span><input type="number" min="0" value={form.current_value} onChange={e=>setForm({...form,current_value:e.target.value})} placeholder="0"/></label><label><span>Unit <small>optional</small></span><input value={form.unit} onChange={e=>setForm({...form,unit:e.target.value})} placeholder="chapters, questions, hours…"/></label><label className="goal-description"><span>Description <small>optional</small></span><textarea value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="Why does this goal matter to you?"/></label></div><div className="goal-editor-actions"><button className="secondary-cta" onClick={resetForm}>Cancel</button><button className="primary-cta" onClick={saveGoal} disabled={saving}>{saving?"Saving…":editingId?"Save changes":"Create goal"}<ArrowRight size={16}/></button></div></article>}
+    <div className="goals-section-head"><div><span className="card-kicker">ACTIVE GOALS</span><h2>Your targets</h2></div><span className="goal-count">{active.length} active</span></div>
+    {active.length?<div className="goal-card-grid inline-goal-grid">{active.map(goal=><GoalCard key={goal.id} goal={goal} progress={progressFor(goal)} stats={statsFor(goal.id)} onEdit={()=>openEdit(goal)} onDelete={()=>deleteGoal(goal)} onComplete={()=>completeGoal(goal)}/>)}</div>:<div className="goals-empty"><Target size={28}/><h3>Nothing on the board yet.</h3><p>Add your first goal and give your daily work a destination.</p><button className="secondary-cta" onClick={()=>{resetForm();setShowForm(true)}}>Create your first goal <ArrowRight size={16}/></button></div>}
+    {completed.length>0&&<section className="goals-list-section completed-goals-section"><div className="goals-section-head"><div><span className="card-kicker">COMPLETED</span><h2>Finished goals</h2></div><span className="goal-count">{completed.length}</span></div><div className="goal-card-grid inline-goal-grid">{completed.map(goal=><GoalCard key={goal.id} goal={goal} progress={100} stats={statsFor(goal.id)} completed onEdit={()=>openEdit(goal)} onDelete={()=>deleteGoal(goal)} onComplete={()=>completeGoal(goal)}/>)}</div></section>}
+  </section>;
+}
+
+function StudySummaryModal({ history=[], onClose }) {
+  const studyDays=history.filter(r=>Number(r.daily_score||0)>0||Number(r.lecture_minutes||0)>0||Number(r.questions_done||0)>0||Number(r.pages_read||0)>0);
+  const activeDates=new Set(studyDays.map(r=>r.record_date));
+  const streakFrom=(set)=>{let run=0;let d=new Date();while(set.has(d.toISOString().slice(0,10))){run++;d.setDate(d.getDate()-1);}return run;};
+  const streak=streakFrom(activeDates);
+  const bestStreak=(()=>{const sorted=[...activeDates].sort();let best=0,run=0,prev=null;for(const key of sorted){const d=new Date(key+"T12:00:00");if(prev){const diff=Math.round((d-prev)/86400000);run=diff===1?run+1:1;}else run=1;best=Math.max(best,run);prev=d;}return best;})();
+  const totalMinutes=history.reduce((a,r)=>a+Number(r.lecture_minutes||0),0);
+  const totalLectures=history.reduce((a,r)=>a+Number(r.lectures_watched||0),0);
+  const totalQuestions=history.reduce((a,r)=>a+Number(r.questions_done||0),0);
+  const totalPages=history.reduce((a,r)=>a+Number(r.pages_read||0),0);
+  const avgScore=history.length?Math.round(history.reduce((a,r)=>a+Number(r.daily_score||0),0)/history.length):0;
+  const last7=history.filter(r=>{const d=new Date(r.record_date+"T12:00:00");const diff=Math.floor((new Date()-d)/86400000);return diff>=0&&diff<7;});
+  const last30=history.filter(r=>{const d=new Date(r.record_date+"T12:00:00");const diff=Math.floor((new Date()-d)/86400000);return diff>=0&&diff<30;});
+  return <div className="study-summary-overlay" role="dialog" aria-modal="true"><div className="study-summary-modal"><div className="study-summary-head"><div><span className="card-kicker">STUDY SUMMARY</span><h2>Your consistency, in full.</h2><p>Study evidence collected from your TRACKEN records.</p></div><button className="icon-close" onClick={onClose} aria-label="Close study summary"><X size={18}/></button></div><div className="streak-feature"><div><span>CURRENT STREAK</span><strong>{streak}<small> days</small></strong><p>{streak?"Keep the chain alive today.":"Log study activity today to start your streak."}</p></div><div><span>BEST STREAK</span><strong>{bestStreak}<small> days</small></strong><p>Your longest consecutive run.</p></div></div><div className="study-summary-stats"><div><b>{Math.floor(totalMinutes/60)}h {totalMinutes%60}m</b><span>Total study time</span></div><div><b>{totalLectures.toLocaleString()}</b><span>Lectures</span></div><div><b>{totalQuestions.toLocaleString()}</b><span>Questions</span></div><div><b>{totalPages.toLocaleString()}</b><span>Pages read</span></div><div><b>{studyDays.length}</b><span>Active study days</span></div><div><b>{history.filter(r=>r.exercise_done).length}</b><span>Exercise sessions</span></div><div><b>{avgScore}%</b><span>Average daily score</span></div><div><b>{history.length}</b><span>Records saved</span></div></div><div className="study-summary-periods"><article><span>LAST 7 DAYS</span><strong>{last7.length} active</strong><small>{last7.reduce((a,r)=>a+Number(r.lecture_minutes||0),0)} min · {last7.reduce((a,r)=>a+Number(r.questions_done||0),0)} questions</small></article><article><span>LAST 30 DAYS</span><strong>{last30.length} active</strong><small>{last30.reduce((a,r)=>a+Number(r.lecture_minutes||0),0)} min · {last30.reduce((a,r)=>a+Number(r.questions_done||0),0)} questions</small></article><article><span>RECENT BEST DAY</span><strong>{history.slice().sort((a,b)=>Number(b.daily_score||0)-Number(a.daily_score||0))[0]?.daily_score||0}%</strong><small>Highest recorded daily score</small></article></div><button className="primary-cta study-summary-close" onClick={onClose}>Back to Productivity Engine <ArrowRight size={16}/></button></div></div>;
+}
+
+function GoalsPage({ session, goals, setGoals, tasks, theme, toggleTheme, onBack, onError }) {
+  const userId = session.user.id;
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    title: "", category: "Academic", target_date: "", priority: "medium",
+    description: "", target_value: "", current_value: "", unit: ""
+  });
+
+  const resetForm = () => {
+    setForm({ title: "", category: "Academic", target_date: "", priority: "medium", description: "", target_value: "", current_value: "", unit: "" });
+    setEditingId(null);
+    setShowForm(false);
+  };
+
+  const openEdit = (goal) => {
+    setEditingId(goal.id);
+    setForm({
+      title: goal.title || "", category: goal.category || "Academic", target_date: goal.target_date || "",
+      priority: goal.priority || "medium", description: goal.description || "",
+      target_value: goal.target_value ?? "", current_value: goal.current_value ?? "", unit: goal.unit || ""
+    });
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const saveGoal = async () => {
+    if (!form.title.trim()) return onError("Please give your goal a name.");
+    if (form.target_value !== "" && Number(form.current_value || 0) > Number(form.target_value)) {
+      return onError("Current progress cannot be greater than the target.");
+    }
+    setSaving(true);
+    onError("");
+    const payload = {
+      user_id: userId,
+      title: form.title.trim(),
+      category: form.category,
+      target_date: form.target_date || null,
+      priority: form.priority,
+      description: form.description.trim() || null,
+      target_value: form.target_value === "" ? null : Number(form.target_value),
+      current_value: Number(form.current_value || 0),
+      unit: form.unit.trim() || null,
+      status: "active"
+    };
+
+    const query = editingId
+      ? supabase.from("goals").update(payload).eq("id", editingId).eq("user_id", userId).select().single()
+      : supabase.from("goals").insert(payload).select().single();
+    const { data, error } = await query;
+    setSaving(false);
+    if (error) return onError(error.message);
+
+    setGoals((current) => editingId ? current.map((goal) => goal.id === editingId ? data : goal) : [data, ...current]);
+    resetForm();
+  };
+
+  const deleteGoal = async (goal) => {
+    if (!window.confirm(`Delete "${goal.title}"?`)) return;
+    const { error } = await supabase.from("goals").delete().eq("id", goal.id).eq("user_id", userId);
+    if (error) return onError(error.message);
+    setGoals((current) => current.filter((item) => item.id !== goal.id));
+  };
+
+  const completeGoal = async (goal) => {
+    const nextStatus = goal.status === "completed" ? "active" : "completed";
+    const { data, error } = await supabase.from("goals").update({ status: nextStatus }).eq("id", goal.id).eq("user_id", userId).select().single();
+    if (error) return onError(error.message);
+    setGoals((current) => current.map((item) => item.id === goal.id ? data : item));
+  };
+
+  const getTaskStats = (goalId) => {
+    const linked = tasks.filter((task) => task.goal_id === goalId);
+    return { total: linked.length, done: linked.filter((task) => task.status === "completed").length };
+  };
+
+  const progress = (goal) => {
+    if (!goal.target_value || Number(goal.target_value) <= 0) return 0;
+    return Math.min(100, Math.round((Number(goal.current_value || 0) / Number(goal.target_value)) * 100));
+  };
+
+  const activeGoals = goals.filter((goal) => goal.status === "active");
+  const completedGoals = goals.filter((goal) => goal.status === "completed");
+
+  return (
+    <div className="goals-page goals-page-embedded">
+      <main className="goals-content">
+        <section className="goals-hero">
+          <div>
+            <span className="card-kicker">YOUR BIGGER PICTURE</span>
+            <h1>Goals that&nbsp;<em>move you.</em></h1>
+            <p>Turn a long-term ambition into a clear target, then let your daily work move it forward.</p>
+          </div>
+          <button className="primary-cta goals-add-button" onClick={() => { resetForm(); setShowForm(true); }}><Plus size={17} /> Add goal</button>
+        </section>
+
+        {showForm && (
+          <section className="goal-editor">
+            <div className="goal-editor-head">
+              <div><span className="card-kicker">{editingId ? "EDIT GOAL" : "NEW GOAL"}</span><h2>{editingId ? "Refine the target." : "What are you working toward?"}</h2></div>
+              <button className="icon-close" onClick={resetForm}><X size={18} /></button>
+            </div>
+            <div className="goal-form-grid">
+              <label><span>Goal name</span><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Crack SSC CGL 2027" /></label>
+              <label><span>Category</span><select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{GOAL_CATEGORIES.map((item) => <option key={item}>{item}</option>)}</select></label>
+              <label><span>Target date</span><input type="date" value={form.target_date} onChange={(e) => setForm({ ...form, target_date: e.target.value })} /></label>
+              <label><span>Priority</span><select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>{GOAL_PRIORITIES.map((item) => <option key={item} value={item}>{item.charAt(0).toUpperCase() + item.slice(1)}</option>)}</select></label>
+              <label><span>Target number <small>optional</small></span><input type="number" min="0" value={form.target_value} onChange={(e) => setForm({ ...form, target_value: e.target.value })} placeholder="e.g. 100" /></label>
+              <label><span>Current progress</span><input type="number" min="0" value={form.current_value} onChange={(e) => setForm({ ...form, current_value: e.target.value })} placeholder="0" /></label>
+              <label><span>Unit <small>optional</small></span><input value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="hours, chapters, questions..." /></label>
+              <label className="goal-description"><span>Description <small>optional</small></span><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Why does this goal matter to you?" /></label>
+            </div>
+            <div className="goal-editor-actions"><button className="secondary-cta" onClick={resetForm}>Cancel</button><button className="primary-cta" onClick={saveGoal} disabled={saving}>{saving ? "Saving…" : editingId ? "Save changes" : "Create goal"} <ArrowRight size={16} /></button></div>
+          </section>
+        )}
+
+        <section className="goals-list-section">
+          <div className="goals-section-head"><div><span className="card-kicker">ACTIVE GOALS</span><h2>Your targets</h2></div><span className="goal-count">{activeGoals.length} active</span></div>
+          {activeGoals.length === 0 ? (
+            <div className="goals-empty"><Target size={28} /><h3>Nothing on the board yet.</h3><p>Add your first goal and give your daily work a destination.</p><button className="secondary-cta" onClick={() => { resetForm(); setShowForm(true); }}>Create your first goal <ArrowRight size={16} /></button></div>
+          ) : (
+            <div className="goal-card-grid">
+              {activeGoals.map((goal) => {
+                const p = progress(goal); const stats = getTaskStats(goal.id);
+                return <GoalCard key={goal.id} goal={goal} progress={p} stats={stats} onEdit={() => openEdit(goal)} onDelete={() => deleteGoal(goal)} onComplete={() => completeGoal(goal)} />;
+              })}
+            </div>
+          )}
+        </section>
+
+        {completedGoals.length > 0 && (
+          <section className="goals-list-section completed-goals-section">
+            <div className="goals-section-head"><div><span className="card-kicker">MILESTONES</span><h2>Completed goals</h2></div><span className="goal-count">{completedGoals.length}</span></div>
+            <div className="goal-card-grid">
+              {completedGoals.map((goal) => { const stats = getTaskStats(goal.id); return <GoalCard key={goal.id} goal={goal} progress={100} stats={stats} completed onEdit={() => openEdit(goal)} onDelete={() => deleteGoal(goal)} onComplete={() => completeGoal(goal)} />; })}
+            </div>
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function GoalCard({ goal, progress, stats, onEdit, onDelete, onComplete, completed = false }) {
+  const daysLeft = goal.target_date ? Math.ceil((new Date(`${goal.target_date}T23:59:59`) - new Date()) / 86400000) : null;
+  return (
+    <article className={`goal-card ${completed ? "is-completed" : ""}`}>
+      <div className="goal-card-top"><div className="goal-category"><Flag size={13} /> {goal.category}</div><span className={`priority-badge ${goal.priority}`}>{goal.priority}</span></div>
+      <h3>{goal.title}</h3>
+      {goal.description && <p className="goal-description-text">{goal.description}</p>}
+      <div className="goal-progress-head"><span>Progress</span><strong>{progress}%</strong></div>
+      <div className="goal-progress-bar"><i style={{ width: `${progress}%` }}></i></div>
+      <div className="goal-stats">
+        <div><span>Target</span><strong>{goal.target_value ?? "—"}{goal.unit ? ` ${goal.unit}` : ""}</strong></div>
+        <div><span>Linked tasks</span><strong>{stats.done}/{stats.total}</strong></div>
+        <div><span>{daysLeft === null ? "Target date" : daysLeft < 0 ? "Overdue" : "Time left"}</span><strong>{daysLeft === null ? (goal.target_date || "Not set") : daysLeft < 0 ? `${Math.abs(daysLeft)}d` : `${daysLeft}d`}</strong></div>
+      </div>
+      <div className="goal-card-actions"><button onClick={onComplete}>{completed ? "Reopen" : "Mark complete"}</button><button onClick={onEdit}>Edit</button><button className="danger-action" onClick={onDelete}><Trash2 size={14} /></button></div>
+    </article>
+  );
+}
+
+function compressAvatar(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Unable to read the image."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("Unable to process the image."));
+      img.onload = () => {
+        const size = 512;
+        const canvas = document.createElement("canvas");
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        const scale = Math.max(size / img.width, size / img.height);
+        const w = img.width * scale, h = img.height * scale;
+        ctx.drawImage(img, (size-w)/2, (size-h)/2, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.78));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function ProfilePage({ session, profile, setProfile, theme, toggleTheme, onBack, onSaved }) {
+  const userId = session.user.id;
+  useEffect(() => { if (!profile.avatar_url) { const localAvatar = localStorage.getItem(`tracken-avatar-${userId}`); if (localAvatar) setProfile(current => ({ ...current, avatar_url: localAvatar })); } }, [userId, profile.avatar_url, setProfile]);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [showFactoryReset, setShowFactoryReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const completionFields = [
+    profile.preparation_for,
+    profile.target,
+    profile.direction_goal,
+    profile.motivation,
+    profile.best_study_time,
+    profile.biggest_challenge,
+    profile.study_methods?.length,
+    profile.career_interests?.length,
+    profile.career_values?.length,
+    profile.five_year_vision
+  ];
+  const completed = completionFields.filter(Boolean).length;
+  const completion = Math.round((completed / completionFields.length) * 100);
+
+  const update = (field, value) => setProfile((current) => ({ ...current, [field]: value }));
+
+  const toggleArray = (field, value, max = Infinity) => {
+    setProfile((current) => {
+      const list = current[field] || [];
+      if (list.includes(value)) {
+        return { ...current, [field]: list.filter((item) => item !== value) };
+      }
+      if (list.length >= max) return current;
+      return { ...current, [field]: [...list, value] };
+    });
+  };
+
+  const saveProfile = async () => {
+    setMessage("");
+    setError("");
+
+    if (!profile.preparation_for) {
+      setError("Please choose what you're preparing for.");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    setSaving(true);
+    const payload = {
+      id: userId,
+      full_name: profile.full_name.trim(),
+      avatar_url: profile.avatar_url || null,
+      preparation_for: profile.preparation_for,
+      preparation_other: profile.preparation_other?.trim() || null,
+      target: profile.target?.trim() || null,
+      direction_goal: profile.direction_goal || null,
+      motivation: profile.motivation || null,
+      best_study_time: profile.best_study_time || null,
+      biggest_challenge: profile.biggest_challenge || null,
+      study_methods: profile.study_methods || [],
+      career_interests: profile.career_interests || [],
+      career_values: profile.career_values || [],
+      five_year_vision: profile.five_year_vision?.trim() || null,
+      badge: profile.badge || null,
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error: saveError } = await supabase
+      .from("profiles")
+      .upsert(payload, { onConflict: "id" })
+      .select()
+      .single();
+
+    setSaving(false);
+
+    if (saveError) {
+      setError(saveError.message);
+      return;
+    }
+
+    setProfile({ ...emptyProfile, ...data, study_methods: data.study_methods || [], career_interests: data.career_interests || [], career_values: data.career_values || [] });
+    setMessage("Profile saved successfully.");
+    onSaved?.();
+  };
+
+  const factoryReset = async () => {
+    if (resetting) return;
+    setResetting(true); setError("");
+    try {
+      const { data: avatarFiles } = await supabase.storage.from("avatars").list(userId, { limit: 100 });
+      if (avatarFiles?.length) await supabase.storage.from("avatars").remove(avatarFiles.map(file => `${userId}/${file.name}`));
+    } catch {}
+    const { error: resetError } = await supabase.rpc("factory_reset_user_data");
+    if (resetError) { setError(resetError.message); setResetting(false); return; }
+    clearTrackenLocalCache(userId);
+    setShowFactoryReset(false);
+    setMessage("Factory reset complete. Your TRACKEN data has been cleared.");
+    setTimeout(() => window.location.reload(), 900);
+  };
+
+  const uploadAvatar = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Please choose an image smaller than 2 MB.");
+      return;
+    }
+
+    setUploading(true);
+    setError("");
+    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, {
+      cacheControl: "3600",
+      upsert: false
+    });
+
+    if (uploadError) {
+      try {
+        const dataUrl = await compressAvatar(file);
+        update("avatar_url", dataUrl);
+        localStorage.setItem(`tracken-avatar-${userId}`, dataUrl);
+        setMessage("Photo ready. The avatar storage bucket is unavailable, so TRACKEN prepared a compact local fallback. Save your profile to keep it on this device.");
+      } catch {
+        setError(`Photo storage is unavailable: ${uploadError.message}`);
+      }
+      setUploading(false);
+      return;
+    }
+
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    update("avatar_url", data.publicUrl);
+    setUploading(false);
+    setMessage("Photo selected. Save your profile to keep it.");
+  };
+
+  return (
+    <div className="profile-page">
+      <header className="profile-topbar">
+        <button className="profile-back" onClick={onBack}><ArrowLeft size={17} /> Dashboard</button>
+        <div className="brand">TRACKEN<span>.</span></div>
+        <button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode">{theme === "light" ? <Moon size={18} /> : <Sun size={18} />}<span>{theme === "light" ? "Dark mode" : "Light mode"}</span></button>
+      </header>
+
+      <main className="profile-content">
+        <div className="profile-heading">
+          <div>
+            <span className="card-kicker">YOUR PERSONAL IDENTITY</span>
+            <h1>Your <em>direction.</em></h1>
+            <p>Tell TRACKEN a little about where you're going. You can update these details anytime.</p>
+          </div>
+          <div className="profile-completion">
+            <div className="completion-top"><span>Profile completion</span><strong>{completion}%</strong></div>
+            <div className="profile-completion-bar"><i style={{ width: `${completion}%` }}></i></div>
+            <small>{completion === 100 ? "You're all set." : "Complete it gradually — nothing here is a test."}</small>
+          </div>
+        </div>
+
+        {error && <div className="profile-alert error">{error}</div>}
+        {message && <div className="profile-alert success"><Check size={15} /> {message}</div>}
+
+        <section className="profile-hero-card">
+          <div className="profile-photo-wrap">
+            <div className="profile-photo">
+              {profile.avatar_url ? <img src={profile.avatar_url} alt="Profile" /> : <span>{(profile.full_name || session.user.email || "T").trim().charAt(0).toUpperCase()}</span>}
+            </div>
+            <label className="photo-upload">
+              <ImagePlus size={15} /> {uploading ? "Uploading…" : "Add photo"}
+              <input type="file" accept="image/*" onChange={uploadAvatar} disabled={uploading} />
+            </label>
+          </div>
+          <div className="profile-identity-copy">
+            <span className="mini-label">YOUR TRACKEN PROFILE</span>
+            <h2>{profile.full_name || "Your name"}</h2>
+            <p>{profile.preparation_for || "Choose what you're preparing for"}{profile.target ? ` · ${profile.target}` : ""}</p>
+            <div className="profile-chips">
+              {profile.badge && <span className={`profile-badge ${String(profile.badge).toLowerCase()}`}><Medal size={13}/> {profile.badge}</span>}
+              {profile.career_interests?.slice(0, 3).map((item) => <span key={item}>{item}</span>)}
+            </div>
+          </div>
+        </section>
+
+        <section className="profile-section">
+          <div className="profile-section-title">
+            <span className="section-number">01</span>
+            <div><span className="card-kicker">YOUR TRACKEN STYLE</span><h2>How do you want to use TRACKEN?</h2><p>Pick the parts of your personal progress system that matter most to you.</p></div>
+          </div>
+          <div className="profile-form-grid">
+            <label className="profile-field full"><span>Full name</span><input value={profile.full_name} onChange={(e) => update("full_name", e.target.value)} placeholder="Your name" /></label>
+            <SelectField label="What brings you to TRACKEN?" value={profile.preparation_for} options={PROFILE_OPTIONS.preparation} onChange={(value) => update("preparation_for", value)} required />
+            {profile.preparation_for === "Other" && <label className="profile-field"><span>Tell us more</span><input value={profile.preparation_other} onChange={(e) => update("preparation_other", e.target.value)} placeholder="What would you like TRACKEN to help you with?" /></label>}
+            <label className="profile-field"><span>What are you working toward?</span><input value={profile.target} onChange={(e) => update("target", e.target.value)} placeholder="e.g. SSC CGL 2027, a stronger routine, a career goal…" /></label>
+          </div>
+        </section>
+
+        <section className="profile-section">
+          <div className="profile-section-title">
+            <span className="section-number">02</span>
+            <div><span className="card-kicker">WHAT MATTERS TO YOU</span><h2>What should TRACKEN help you improve?</h2><p>Choose the outcomes you want your dashboard to make easier to see.</p></div>
+          </div>
+          <div className="profile-question">
+            <h3>Which outcomes sound most useful? <small>Select one.</small></h3>
+            <OptionGrid options={PROFILE_OPTIONS.direction} value={profile.direction_goal} onChange={(value) => update("direction_goal", value)} />
+          </div>
+          <div className="profile-question">
+            <h3>What keeps you coming back? <small>Select one.</small></h3>
+            <OptionGrid options={PROFILE_OPTIONS.motivation} value={profile.motivation} onChange={(value) => update("motivation", value)} />
+          </div>
+        </section>
+
+        <section className="profile-section">
+          <div className="profile-section-title">
+            <span className="section-number">03</span>
+            <div><span className="card-kicker">YOUR WORKFLOW</span><h2>Build the system around you.</h2><p>Tell TRACKEN which tools fit the way you naturally work.</p></div>
+          </div>
+          <div className="profile-question">
+            <h3>When do you usually have your best focus?</h3>
+            <OptionGrid options={PROFILE_OPTIONS.studyTime} value={profile.best_study_time} onChange={(value) => update("best_study_time", value)} />
+          </div>
+          <div className="profile-question">
+            <h3>What usually gets in your way?</h3>
+            <OptionGrid options={PROFILE_OPTIONS.challenge} value={profile.biggest_challenge} onChange={(value) => update("biggest_challenge", value)} />
+          </div>
+          <div className="profile-question">
+            <h3>Which TRACKEN tools sound useful? <small>Select all that apply.</small></h3>
+            <OptionGrid options={PROFILE_OPTIONS.methods} value={profile.study_methods} onChange={(value) => toggleArray("study_methods", value)} multi />
+          </div>
+        </section>
+
+        <section className="profile-section">
+          <div className="profile-section-title">
+            <span className="section-number">04</span>
+            <div><span className="card-kicker">YOUR PERSONAL SIGNALS</span><h2>What kind of progress feels rewarding?</h2><p>These choices help shape the language and priorities of your TRACKEN profile.</p></div>
+          </div>
+          <div className="profile-question">
+            <h3>Which areas do you want to keep visible? <small>Select all that apply.</small></h3>
+            <OptionGrid options={PROFILE_OPTIONS.careers} value={profile.career_interests} onChange={(value) => toggleArray("career_interests", value)} multi />
+          </div>
+          <div className="profile-question">
+            <h3>Which values do you want your system to reflect? <small>Choose up to 3.</small></h3>
+            <OptionGrid options={PROFILE_OPTIONS.values} value={profile.career_values} onChange={(value) => toggleArray("career_values", value, 3)} multi />
+          </div>
+          <div className="profile-question vision-question">
+            <h3>Where do you see yourself in 5 years?</h3>
+            <p>Imagine your ideal TRACKEN year. What would you have finished, improved, built or understood?</p>
+            <textarea value={profile.five_year_vision} onChange={(e) => update("five_year_vision", e.target.value)} placeholder="Describe the progress you want to look back on…" rows="5"></textarea>
+          </div>
+        </section>
+
+        <div className="profile-save-bar">
+          <div><span className="save-dot"></span><div><strong>Your profile is yours.</strong><small>Your choices and badge stay with your account across devices.</small></div></div>
+          <div className="profile-save-actions"><button className="factory-reset-button" onClick={()=>setShowFactoryReset(true)} disabled={saving || resetting}><RotateCcw size={15}/> Factory Reset</button><button className="primary-cta profile-save" onClick={saveProfile} disabled={saving}>{saving ? "Saving…" : <>Save profile <Save size={16} /></>}</button></div>
+        </div>
+        {showFactoryReset && <div className="factory-reset-overlay" role="dialog" aria-modal="true"><div className="factory-reset-modal"><div className="factory-reset-icon"><RotateCcw size={22}/></div><span className="card-kicker">IRREVERSIBLE ACTION</span><h2>Factory Reset TRACKEN?</h2><p>This will permanently delete your tasks, study records, goals, habits, focus/time data, cashflow, investments, net-worth entries and profile information from this account. Your login account itself will remain.</p><div className="factory-reset-actions"><button className="secondary-cta" onClick={()=>setShowFactoryReset(false)} disabled={resetting}>Keep my data</button><button className="danger-cta" onClick={factoryReset} disabled={resetting}>{resetting?"Resetting…":"Yes, delete all data"}</button></div></div></div>}
+      </main>
+    </div>
+  );
+}
+
+function SelectField({ label, value, options, onChange, required }) {
+  return (
+    <label className="profile-field">
+      <span>{label} {required && <b>*</b>}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Select an option</option>
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function OptionGrid({ options, value, onChange, multi = false }) {
+  const selected = Array.isArray(value) ? value : [value].filter(Boolean);
+  return (
+    <div className="option-grid">
+      {options.map((option) => {
+        const active = selected.includes(option);
+        return (
+          <button type="button" key={option} className={`option-card ${active ? "active" : ""}`} onClick={() => onChange(option)}>
+            <span className="option-check">{active ? <Check size={13} /> : ""}</span>
+            <span>{option}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export default App;
