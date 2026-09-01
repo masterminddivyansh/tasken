@@ -4863,7 +4863,7 @@ button, input, select, textarea {
 
 
 /* =========================================================
-   TRACKEN 3.5.10 — PRODUCTION POLISH
+   TRACKEN 3.5.11 — PRODUCTION POLISH
    Readability, recovery states, focus visibility and mobile-safe controls.
    ========================================================= */
 :root {
@@ -5896,7 +5896,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 
 /* =========================================================
-   TRACKEN 3.5.10 — FINAL HEADER / SIDEBAR / SESSION POLISH
+   TRACKEN 3.5.11 — FINAL HEADER / SIDEBAR / SESSION POLISH
    ========================================================= */
 
 /* Public header: balanced three-zone layout with clean buttons. */
@@ -6059,7 +6059,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 
 /* =========================================================
-   TRACKEN 3.5.10 — MOBILE-FIRST + TABLET EXPERIENCE LOCK
+   TRACKEN 3.5.11 — MOBILE-FIRST + TABLET EXPERIENCE LOCK
    Final override layer. Desktop layout remains unchanged.
    ========================================================= */
 
@@ -6325,7 +6325,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 
 /* =========================================================
-   TRACKEN 3.5.10 — SIDEBAR + AUTH FINAL POLISH
+   TRACKEN 3.5.11 — SIDEBAR + AUTH FINAL POLISH
    ========================================================= */
 
 /* Dashboard sidebar: polished expanded state. */
@@ -6687,7 +6687,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 
 /* =========================================================
-   TRACKEN 3.5.10 — FINAL UX POLISH
+   TRACKEN 3.5.11 — FINAL UX POLISH
    1. Premium calendar/history experience
    2. Collapsed dashboard rail becomes logo-only
    3. Time-aware dashboard greeting
@@ -7131,7 +7131,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   }
 }
 
-/* TRACKEN CALENDAR 3.5.10 — FINAL ALIGNMENT + DASHBOARD TOPBAR
+/* TRACKEN CALENDAR 3.5.11 — FINAL ALIGNMENT + DASHBOARD TOPBAR
    Final override layer. This is intentionally last in the stylesheet. */
 
 .calendar-history-page {
@@ -7662,7 +7662,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 
-/* TRACKEN CALENDAR 3.5.10 — HARD FINAL LAYOUT LOCK
+/* TRACKEN CALENDAR 3.5.11 — HARD FINAL LAYOUT LOCK
    This final layer deliberately neutralizes the older subpage/rail rules. */
 .calendar-history-page {
   position: relative !important;
@@ -7923,7 +7923,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* =========================================================
-   TRACKEN NAVIGATION 3.5.10 — DASHBOARD AS THE PRIMARY MENU
+   TRACKEN NAVIGATION 3.5.11 — DASHBOARD AS THE PRIMARY MENU
    Tasks + Study Records now belong to Dashboard.
    In collapsed mode, hovering/focusing Dashboard reveals
    a compact flyout so the child sections remain accessible.
@@ -9030,7 +9030,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .budget-editor{display:grid;grid-template-columns:180px 1fr 70px;gap:14px;align-items:center;margin-bottom:24px}.budget-editor input{height:42px;border:1px solid var(--line,#dfe3e7);background:var(--surface,#fff);border-radius:9px;padding:0 12px;color:inherit}.budget-track{height:10px;background:#eef0f2;border-radius:20px;overflow:hidden}.budget-track i{display:block;height:100%;background:#17191e;border-radius:20px}.budget-editor>b{font-size:11px}.balance-lists{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:24px}.balance-lists>div{border:1px solid var(--line,#e4e7eb);border-radius:13px;padding:16px}.balance-lists>div>span{font-size:9px;letter-spacing:.14em;font-weight:800;color:var(--muted,#858b95)}.balance-lists p{display:flex;justify-content:space-between;gap:12px;margin:14px 0 0;padding-top:12px;border-top:1px solid var(--line,#edf0f2);font-size:12px}.balance-lists .muted-row{color:var(--muted,#858b95)}
 @media(max-width:760px){.budget-editor{grid-template-columns:1fr}.balance-lists{grid-template-columns:1fr}}
 
-/* TRACKEN 3.5.10 — INTELLIGENCE & CROSS-MODULE ANALYTICS */
+/* TRACKEN 3.5.11 — INTELLIGENCE & CROSS-MODULE ANALYTICS */
 .intelligence-content{padding-bottom:80px}
 .intelligence-hero{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:24px;align-items:center;padding:30px;border:1px solid var(--border);background:linear-gradient(135deg,var(--surface),var(--surface-2));border-radius:22px;box-shadow:var(--shadow-sm);margin-bottom:18px}
 .intelligence-hero h2{font-size:clamp(28px,3.4vw,46px);letter-spacing:-.055em;margin:7px 0 9px;max-width:760px}
@@ -9049,13 +9049,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media(max-width:720px){.intelligence-hero{grid-template-columns:1fr;padding:22px}.intelligence-orbit{justify-self:start;width:132px;height:132px}.intelligence-orbit strong{font-size:36px}.intelligence-signal-grid{grid-template-columns:1fr 1fr}.finance-signal-grid{grid-template-columns:1fr}.finance-signal-grid>div,.finance-signal-grid>div:nth-child(2n){border-right:0}.finance-signal-grid>div:nth-last-child(-n+2){border-bottom:1px solid var(--border)}.finance-signal-grid>div:last-child{border-bottom:0}.recent-signal-list>div{grid-template-columns:48px minmax(0,1fr)}.recent-signal-list small{display:none}}
 @media(max-width:460px){.intelligence-signal-grid{grid-template-columns:1fr}.comparison-list>div{grid-template-columns:1fr auto}.comparison-list small{grid-column:2}.intelligence-hero h2{font-size:29px}}
 
-/* TRACKEN 3.5.10 — ADVANCED PLANNING ENGINE */
+/* TRACKEN 3.5.11 — ADVANCED PLANNING ENGINE */
 .planner-engine{display:flex;flex-direction:column;gap:18px}.planner-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px}.planner-toolbar h2{margin:4px 0 0;font-size:22px;letter-spacing:-.035em}.planner-toolbar-actions{display:flex;gap:8px}.planner-kpis{display:grid;grid-template-columns:minmax(300px,1.35fr) repeat(2,minmax(180px,.7fr));gap:14px}.planner-kpis>article{border:1px solid var(--line,#e4e7eb);background:var(--surface,#fff);border-radius:18px;padding:22px;box-shadow:0 8px 28px rgba(20,24,30,.035);display:flex;flex-direction:column;min-height:150px}.planner-kpis span{font-size:9px;letter-spacing:.16em;font-weight:800;color:var(--muted,#858b95)}.planner-kpis strong{font-size:38px;letter-spacing:-.05em;margin-top:auto}.planner-kpis small,.planner-kpis p{font-size:11px;color:var(--muted,#858b95);margin:5px 0 0}.planner-kpi-main{background:linear-gradient(145deg,#17191e,#292c33)!important;color:#fff}.planner-kpi-main span{color:rgba(255,255,255,.62)}.planner-kpi-main p{color:rgba(255,255,255,.62)}.planner-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.8fr);gap:18px}.planner-task-list{display:flex;flex-direction:column}.planner-task-row{display:grid;grid-template-columns:10px minmax(0,1fr) 145px;gap:12px;align-items:center;padding:14px 4px;border-bottom:1px solid var(--line,#edf0f2)}.planner-task-row:last-child{border-bottom:0}.planner-task-row>div{min-width:0}.planner-task-row b{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.planner-task-row small{display:block;color:var(--muted,#858b95);font-size:10px;margin-top:4px;text-transform:capitalize}.planner-task-row select{border:1px solid var(--line,#e4e7eb);background:var(--surface,#fff);color:var(--text,#16181d);border-radius:9px;padding:8px 9px;font-size:10px;font-weight:700;min-width:0}.planner-goal-list{display:flex;flex-direction:column;gap:18px}.planner-goal-list>div>div{display:flex;justify-content:space-between;gap:10px;align-items:center}.planner-goal-list b{font-size:12px}.planner-goal-list span,.planner-goal-list small{font-size:10px;color:var(--muted,#858b95)}.planner-goal-list i{display:block;height:6px;background:var(--page-bg,#f3f4f6);border-radius:6px;overflow:hidden;margin:8px 0 5px}.planner-goal-list em{display:block;height:100%;background:#1c1e23;border-radius:6px}.planner-week-card{padding-bottom:20px}.planner-week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}.planner-week-grid button{border:1px solid var(--line,#e4e7eb);background:var(--surface,#fff);border-radius:12px;padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:5px;color:var(--muted,#858b95);cursor:pointer}.planner-week-grid button:hover{border-color:#b9bdc5}.planner-week-grid button.selected{background:#17191e;color:#fff;border-color:#17191e}.planner-week-grid span{font-size:9px;text-transform:uppercase;letter-spacing:.08em;font-weight:800}.planner-week-grid b{font-size:20px;color:inherit}.planner-week-grid small{font-size:9px;opacity:.7}
 @media(max-width:1050px){.planner-kpis{grid-template-columns:1fr 1fr}.planner-kpi-main{grid-column:1/-1}.planner-grid{grid-template-columns:1fr}.planner-week-grid{overflow-x:auto;grid-template-columns:repeat(7,minmax(72px,1fr))}}
 @media(max-width:760px){.planner-toolbar{align-items:flex-start}.planner-toolbar>button:first-child{font-size:0;padding:9px}.planner-toolbar>button:first-child svg{margin:0}.planner-toolbar-actions .ghost-small:first-child{display:none}.planner-kpis{grid-template-columns:1fr}.planner-kpi-main{grid-column:auto}.planner-task-row{grid-template-columns:10px minmax(0,1fr);}.planner-task-row select{grid-column:2;width:100%}.planner-week-grid{grid-template-columns:repeat(7,72px);overflow-x:auto;padding-bottom:4px}.planner-week-card{overflow:hidden}}
 
 /* =========================================================
-   TRACKEN 3.5.10 — PRODUCTIVITY ENGINE
+   TRACKEN 3.5.11 — PRODUCTIVITY ENGINE
    ========================================================= */
 .productivity-engine{display:grid;gap:18px;padding-bottom:30px}
 .productivity-hero{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:18px;padding:28px;border:1px solid var(--line);border-radius:24px;background:linear-gradient(135deg,var(--surface),var(--surface-2));box-shadow:0 16px 50px rgba(20,20,40,.05)}
@@ -9064,7 +9064,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 @media(max-width:720px){.productivity-kpis{grid-template-columns:1fr 1fr}.engine-task-row{grid-template-columns:28px 1fr}.engine-task-controls{grid-column:2;flex-wrap:wrap}.engine-form-grid{grid-template-columns:1fr 1fr}.engine-form-grid button{grid-column:1/-1}.engine-rule-grid{grid-template-columns:1fr}.productivity-hero{padding:20px}.productivity-hero h2{font-size:30px}}
 
 /* =========================================================
-   TRACKEN 3.5.10 — DAILY OPERATING SYSTEM / RUNWAY
+   TRACKEN 3.5.11 — DAILY OPERATING SYSTEM / RUNWAY
    ========================================================= */
 .runway-engine{display:grid;gap:18px;padding-bottom:30px}.runway-hero{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:18px;padding:28px;border:1px solid var(--line);border-radius:24px;background:linear-gradient(135deg,var(--surface),var(--surface-2));box-shadow:0 16px 50px rgba(20,20,40,.05)}.runway-hero h2{margin:7px 0 8px;font-size:clamp(28px,3vw,44px);letter-spacing:-.045em}.runway-hero p{max-width:820px;color:var(--muted);line-height:1.7;margin:0}.runway-command{border:1px solid var(--line);border-radius:20px;background:var(--bg);padding:20px;display:flex;flex-direction:column;justify-content:center}.runway-command>span{font-size:9px;letter-spacing:.15em;font-weight:850;color:var(--muted)}.runway-command>strong{font-size:34px;letter-spacing:-.05em;margin:5px 0}.runway-command>small,.runway-command>b{font-size:10px;color:var(--muted)}.runway-command>b{margin-top:8px;color:var(--text)}.runway-health-meter{height:8px;background:var(--surface-2);border-radius:99px;overflow:hidden;margin-top:14px}.runway-health-meter i{display:block;height:100%;background:var(--accent);border-radius:inherit;transition:width .25s ease}.runway-date-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:22px}.runway-date-controls strong{font-size:12px;margin:0 4px}.runway-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.runway-kpis article{padding:18px;border:1px solid var(--line);border-radius:18px;background:var(--surface)}.runway-kpis span{display:block;font-size:9px;font-weight:850;letter-spacing:.14em;color:var(--muted)}.runway-kpis strong{display:block;font-size:28px;letter-spacing:-.04em;margin:7px 0 3px}.runway-kpis small{color:var(--muted);font-size:10px}.runway-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,.75fr);gap:18px}.runway-side-stack{display:grid;gap:18px;align-content:start}.runway-settings{display:flex;gap:10px;align-items:end;margin-top:15px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg)}.runway-settings label{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:800;color:var(--muted)}.runway-settings select,.runway-settings input{height:34px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--text);padding:0 9px;font-size:10px;font-weight:800}.runway-settings input{width:70px}.runway-timeline{margin-top:18px}.runway-task-card{display:grid;grid-template-columns:84px minmax(0,1fr) 34px;gap:12px;align-items:stretch;min-height:82px}.runway-time{display:flex;flex-direction:column;align-items:flex-end;gap:7px}.runway-time span{font-size:9px;font-weight:850;color:var(--muted);white-space:nowrap}.runway-time i{width:1px;flex:1;background:var(--line);position:relative}.runway-time i:before{content:"";position:absolute;width:7px;height:7px;border-radius:50%;background:var(--accent);left:-3px;top:0}.runway-task-body{border:1px solid var(--line);border-radius:14px;background:var(--bg);padding:13px 14px;margin-bottom:9px;min-width:0}.runway-task-body>div{display:flex;justify-content:space-between;gap:8px;align-items:center}.runway-task-body>div small{font-size:9px;color:var(--muted)}.runway-priority{font-size:8px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.runway-priority.urgent,.runway-priority.high{color:var(--text)}.runway-priority.medium,.runway-priority.low{color:var(--muted)}.runway-task-body>b{display:block;font-size:12px;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.runway-task-body p{margin:4px 0 0;font-size:9px;color:var(--muted)}.runway-complete{align-self:start;margin-top:9px;width:34px;height:34px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--muted);display:grid;place-items:center;cursor:pointer}.runway-complete:hover{color:var(--text);border-color:var(--text)}.runway-brief-list{display:grid;gap:0;margin-top:5px}.runway-brief-list>div{padding:15px 0;border-bottom:1px solid var(--line)}.runway-brief-list>div:last-child{border-bottom:0}.runway-brief-list span{display:block;font-size:8px;font-weight:900;letter-spacing:.13em;color:var(--muted)}.runway-brief-list b{display:block;font-size:12px;margin-top:5px}.runway-brief-list small{display:block;color:var(--muted);font-size:9px;line-height:1.5;margin-top:4px}.runway-capacity-ring{width:138px;height:138px;border-radius:50%;margin:18px auto 12px;background:conic-gradient(var(--accent) var(--runway-pct, 0%), var(--surface-2) 0);display:grid;place-items:center;position:relative}.runway-capacity-ring:after{content:"";position:absolute;inset:10px;border-radius:50%;background:var(--surface)}.runway-capacity-ring>div{position:relative;z-index:1;text-align:center}.runway-capacity-ring strong{display:block;font-size:25px;letter-spacing:-.05em}.runway-capacity-ring span{display:block;font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}.runway-overflow-list{display:grid;gap:8px}.runway-overflow-list>div{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}.runway-overflow-list b{display:block;font-size:11px}.runway-overflow-list small{display:block;color:var(--muted);font-size:9px;margin-top:3px}.runway-overflow{margin-top:0}.runway-overflow .panel-heading{margin-bottom:12px}
 @media(max-width:1100px){.runway-hero{grid-template-columns:1fr}.runway-kpis{grid-template-columns:repeat(2,1fr)}.runway-grid{grid-template-columns:1fr}}
@@ -9072,7 +9072,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 
 /* =========================================================
-   TRACKEN 3.5.10 — GLOBAL UX / READABILITY / THEME POLISH
+   TRACKEN 3.5.11 — GLOBAL UX / READABILITY / THEME POLISH
    Development polish pass: consistent controls, stronger
    contrast, larger readable typography, and unified dark mode.
    ========================================================= */
@@ -9449,7 +9449,7 @@ body,
 }
 
 /* =========================================================
-   TRACKEN 3.5.10 — FINAL THEME CONSISTENCY PATCH
+   TRACKEN 3.5.11 — FINAL THEME CONSISTENCY PATCH
    Fixes legacy light surfaces leaking into dark mode across
    tracker, planner, analytics, calendar, profile, admin,
    updates, goals and public/auth pages.
@@ -9736,7 +9736,7 @@ body,
 }
 
 /* =========================================================
-   TRACKEN DEPLOYMENT POLISH — 3.5.10 FINAL HARDENING
+   TRACKEN DEPLOYMENT POLISH — 3.5.11 FINAL HARDENING
    ========================================================= */
 
 /* Balanced authenticated shell: sidebar brand and topbar share one measured header row. */
@@ -9947,7 +9947,7 @@ body,
 [data-theme="dark"] .task-quick-add select { background:#101319 !important; color:#f5f7fb !important; border-color:rgba(255,255,255,.14) !important; }
 
 /* =========================================================
-   TRACKEN 3.5.10 — FINAL PRODUCT SHELL OVERRIDES
+   TRACKEN 3.5.11 — FINAL PRODUCT SHELL OVERRIDES
    Requested navigation, theme-control and responsive fixes.
    ========================================================= */
 
@@ -10136,7 +10136,7 @@ body,
 }
 
 /* =========================================================
-   TRACKEN 3.5.10 — FINAL PRE-DEPLOY VISUAL POLISH
+   TRACKEN 3.5.11 — FINAL PRE-DEPLOY VISUAL POLISH
    Base: user-supplied pre-final.zip
    ========================================================= */
 
@@ -10344,7 +10344,7 @@ body,
 }
 
 
-/* 3.5.10 overview command panel — final typography and two-row productivity layout. */
+/* 3.5.11 overview command panel — final typography and two-row productivity layout. */
 .tracken-command-strip {
   display:grid !important;
   grid-template-columns:1fr !important;
@@ -10470,8 +10470,8 @@ body,
 
 
 /* =========================================================
-   TRACKEN 3.5.10 — FINAL TWO VISUAL CORRECTIONS
-   Base: TRACKEN 3.5.10 baseline
+   TRACKEN 3.5.11 — FINAL TWO VISUAL CORRECTIONS
+   Base: TRACKEN 3.5.11 baseline
    ========================================================= */
 
 /* Goals: keep the compact theme icon pinned to the far-right
@@ -10530,7 +10530,7 @@ body,
   border-color: var(--accent, #6c63ff) !important;
 }
 
-/* Final 3.5.10 weekly review dark-mode correction. */
+/* Final 3.5.11 weekly review dark-mode correction. */
 [data-theme="dark"] .review-shell {
   background: #0b0d12 !important;
   color: #f5f7fb !important;
@@ -10672,7 +10672,7 @@ body,
 @media (max-width:420px){.landing-hero-copy h1{font-size:47px}.landing-command-grid strong{font-size:16px}.landing-command-title{align-items:center}.landing-score-ring{width:68px;height:68px}.landing-score-ring:after{inset:6px}.landing-score-ring strong{font-size:20px}.landing-footer-v2{grid-template-columns:1fr}.landing-footer-links,.landing-footer-policies{display:grid;grid-template-columns:1fr 1fr;column-gap:20px}}
 
 
-/* TRACKEN 3.5.10 — FINAL PUBLIC UI POLISH */
+/* TRACKEN 3.5.11 — FINAL PUBLIC UI POLISH */
 .landing-nav-links a,.landing-nav-links button{font-size:13px;font-weight:800;letter-spacing:-.01em}
 .landing-actions{gap:10px}
 .landing-login{border:1px solid var(--line);border-radius:11px;background:var(--surface);color:var(--text);padding:10px 14px;font-size:12px;font-weight:850;line-height:1;box-shadow:0 5px 18px rgba(30,28,65,.04);transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
@@ -10695,7 +10695,7 @@ body,
 @media (max-width:720px){.landing-nav-links{display:none}.landing-login{display:none}.landing-signup{padding:10px 13px}.landing-final-cta{padding-top:65px;padding-bottom:78px}}
 @media (max-width:520px){.auth-top{width:calc(100% - 28px)}.auth-top>.dashboard-theme-button.theme-control{right:0}.landing-actions{gap:6px}.landing-signup{font-size:11px}}
 
-/* TRACKEN 3.5.10 — LIVE RELEASE RESPONSIVE PASS */
+/* TRACKEN 3.5.11 — LIVE RELEASE RESPONSIVE PASS */
 .landing-nav { min-height: 76px; }
 .landing-actions { height: 44px; }
 .landing-theme,
@@ -10861,7 +10861,7 @@ body,
 }
 
 /* =========================================================
-   TRACKEN 3.5.10 — TASK / GOAL / PRODUCTIVITY REFINEMENT
+   TRACKEN 3.5.11 — TASK / GOAL / PRODUCTIVITY REFINEMENT
    ========================================================= */
 .task-work-layout { display:grid; gap:18px; min-width:0; }
 .task-work-summary {
@@ -10982,7 +10982,7 @@ body,
   .study-summary-stats { grid-template-columns:1fr 1fr; }
 }
 
-/* TRACKEN 3.5.10 VERIFIED FIXES */
+/* TRACKEN 3.5.11 VERIFIED FIXES */
 .task-save-button {
   display:inline-flex !important;
   align-items:center !important;
@@ -11011,7 +11011,7 @@ body,
 .productivity-streak-banner { cursor:pointer; }
 .productivity-streak-banner:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 
-/* Admin 3.5.10 controls */
+/* Admin 3.5.11 controls */
 .admin-row-actions { display:flex; gap:7px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
 .admin-row-actions .ghost-small, .admin-row-actions .danger-small { min-height:38px; padding:0 12px; display:inline-flex; align-items:center; gap:6px; border-radius:9px; cursor:pointer; font-weight:800; }
 .danger-small { background:transparent; color:#c53b3b; border:1px solid rgba(197,59,59,.28); }
@@ -11036,7 +11036,7 @@ body,
 @media(max-width:900px){ .admin-networth-row{grid-template-columns:40px 1fr;} .admin-networth-metrics{grid-column:1 / -1;grid-template-columns:repeat(2,minmax(0,1fr));} .admin-inline-form{grid-template-columns:1fr;} }
 @media(max-width:620px){ .admin-networth-metrics{grid-template-columns:1fr;} .admin-row-actions{justify-content:flex-start;} }
 
-/* TRACKEN 3.5.10 — final interaction and layout polish */
+/* TRACKEN 3.5.11 — final interaction and layout polish */
 .productivity-streak-card {
   display:grid;
   grid-template-columns:minmax(260px,1.3fr) minmax(250px,1fr) auto auto;
@@ -11084,7 +11084,7 @@ body,
   .budget-inline-meta { flex-direction:column; }
 }
 
-/* TRACKEN 3.5.10 — interaction fixes and responsive analytics polish */
+/* TRACKEN 3.5.11 — interaction fixes and responsive analytics polish */
 .analytics-panel-head > div { min-width:0; }
 .analytics-panel-head h2,
 .analytics-panel-head p { overflow-wrap:anywhere; word-break:normal; }
@@ -11102,7 +11102,7 @@ body,
   .intelligence-change { padding:7px 9px !important; font-size:11px !important; }
 }
 
-/* TRACKEN 3.5.10 — analytics card layout hardening */
+/* TRACKEN 3.5.11 — analytics card layout hardening */
 .analytics-panel-head { min-width:0; }
 .analytics-panel-head > div { flex:1 1 auto; min-width:0; }
 .analytics-panel-head h2 { max-width:100%; overflow-wrap:break-word; }
@@ -11125,7 +11125,7 @@ body,
   .comparison-list small { grid-column:auto !important; text-align:right; }
 }
 
-/* TRACKEN 3.5.10 — clean Journal redesign */
+/* TRACKEN 3.5.11 — clean Journal redesign */
 .journal-page-shell { min-height:100vh; background:var(--bg); color:var(--text); }
 .journal-nav { position:sticky; top:0; }
 .journal-nav .landing-nav-links .active { color:var(--accent); }
@@ -11164,7 +11164,7 @@ body,
 @media (max-width:620px) { .journal-main{width:min(100% - 30px,1180px)}.journal-hero-copy h1{font-size:50px}.journal-hero-copy p{font-size:15px}.journal-grid{grid-template-columns:1fr}.journal-card.featured{grid-column:auto;display:block}.journal-card-art,.journal-card.featured .journal-card-art{min-height:150px}.journal-empty-state{padding:40px 20px} }
 
 /* =========================================================
-   TRACKEN 3.5.10 — JOURNAL READING EXPERIENCE
+   TRACKEN 3.5.11 — JOURNAL READING EXPERIENCE
    ========================================================= */
 .journal-card[role="button"] { cursor:pointer; }
 .journal-card[role="button"]:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
@@ -11193,7 +11193,7 @@ body,
   .journal-post-body p:first-child { font-size:17px; }
 }
 
-/* TRACKEN 3.5.10 — Journal Gallery */
+/* TRACKEN 3.5.11 — Journal Gallery */
 .journal-gallery-entry{margin:0 0 28px;padding:24px 28px;border:1px solid var(--line);border-radius:24px;background:var(--card);display:flex;align-items:center;justify-content:space-between;gap:24px;box-shadow:0 18px 50px rgba(20,20,40,.05)}
 .journal-gallery-entry h2{font-size:clamp(24px,3vw,36px);margin:5px 0 6px;letter-spacing:-.04em}.journal-gallery-entry p{margin:0;max-width:650px;color:var(--muted)}
 .journal-gallery-overlay{position:fixed;inset:0;z-index:1000;background:rgba(8,8,14,.72);backdrop-filter:blur(10px);padding:32px;display:flex;align-items:center;justify-content:center}
@@ -11206,7 +11206,7 @@ body,
 .admin-gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;margin-top:22px}.admin-gallery-grid article{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--card);padding-bottom:12px}.admin-gallery-grid article>img{width:100%;height:150px;object-fit:cover;display:block}.admin-gallery-grid article>div{padding:11px 12px 8px;display:flex;flex-direction:column;gap:3px}.admin-gallery-grid article>div strong{font-size:13px}.admin-gallery-grid article>div small{color:var(--muted);font-size:11px}.admin-gallery-grid article>button{margin-left:12px}
 @media(max-width:760px){.journal-gallery-entry{align-items:flex-start;flex-direction:column}.journal-gallery-overlay{padding:10px}.journal-gallery-modal{padding:18px;border-radius:20px}.admin-gallery-upload{grid-template-columns:1fr}.journal-gallery-grid{columns:2 150px}}
 
-/* TRACKEN 3.5.10 — unified account state, profile badges, reset and rich publishing */
+/* TRACKEN 3.5.11 — unified account state, profile badges, reset and rich publishing */
 .admin-gallery-upload-premium{margin-top:24px;padding:18px;border:1px solid var(--line);border-radius:22px;background:linear-gradient(180deg,var(--surface),var(--bg));box-shadow:0 18px 45px rgba(20,20,40,.05)}
 .admin-gallery-dropzone{min-height:190px;border:1.5px dashed rgba(91,85,246,.35);border-radius:18px;background:var(--accent-soft);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:8px;padding:28px;cursor:pointer;position:relative;overflow:hidden;transition:.2s ease}
 .admin-gallery-dropzone:hover{transform:translateY(-2px);border-color:var(--accent);background:color-mix(in srgb,var(--accent-soft) 82%,var(--surface))}
@@ -11225,7 +11225,7 @@ body,
 @media(max-width:760px){.gallery-upload-bottom{grid-template-columns:1fr}.profile-save-actions{width:100%;justify-content:flex-end}.profile-save-bar{gap:12px;align-items:flex-start}.factory-reset-actions{flex-direction:column}.factory-reset-actions button{width:100%}.admin-user-stats{align-items:stretch}.admin-badge-control{width:max-content}.article-rich-editor{min-height:260px}}
 
 
-/* TRACKEN 3.5.10 — unified Goals page inside Tracker Center */
+/* TRACKEN 3.5.11 — unified Goals page inside Tracker Center */
 .goals-page-embedded { min-height:0 !important; background:transparent !important; }
 .goals-page-embedded .goals-content { width:100% !important; max-width:none !important; margin:0 !important; padding:28px 0 72px !important; }
 .goals-page-embedded .goals-hero { margin-bottom:34px; }
@@ -11235,11 +11235,11 @@ body,
 }
 
 
-/* TRACKEN 3.5.10 — Habit System */
+/* TRACKEN 3.5.11 — Habit System */
 .habit-control-bar{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 18px;border:1px solid var(--line,#e4e7eb);border-radius:14px;background:color-mix(in srgb,var(--surface,#fff) 92%,var(--accent,#5b4ff5) 8%);margin-bottom:18px}.habit-control-bar>div{display:flex;align-items:baseline;gap:9px}.habit-control-bar strong{font-size:24px;letter-spacing:-.04em}.habit-control-bar span{font-size:11px;color:var(--muted,#858b95)}.habit-form-card{border:1px solid var(--line,#dfe3e7);border-radius:16px;padding:20px;margin-bottom:18px;background:var(--surface,#fff);box-shadow:0 12px 34px rgba(20,24,30,.05)}.habit-form-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px}.habit-form-head h3{margin:5px 0 0;font-size:20px;letter-spacing:-.035em}.habit-form-grid{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(150px,.8fr) minmax(130px,.6fr);gap:12px}.habit-form-grid label{display:flex;flex-direction:column;gap:7px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#707782)}.habit-form-grid input{height:44px;border:1px solid var(--line,#dfe3e7);border-radius:10px;padding:0 12px;background:var(--surface,#fff);color:inherit;font:inherit;outline:none}.habit-form-grid input:focus{border-color:var(--accent,#5b4ff5);box-shadow:0 0 0 3px rgba(91,79,245,.09)}.habit-form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}.icon-button{border:1px solid var(--line,#dfe3e7);background:transparent;border-radius:9px;width:34px;height:34px;cursor:pointer;font-size:22px;color:inherit}.habit-system-list{display:flex;flex-direction:column;gap:14px}.habit-system-card{border:1px solid var(--line,#e4e7eb);border-radius:16px;padding:20px;background:var(--surface,#fff)}.habit-system-card-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.habit-system-card-head h3{margin:4px 0 5px;font-size:19px;letter-spacing:-.035em}.habit-system-card-head p{margin:0;color:var(--muted,#858b95);font-size:11px}.habit-row-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.danger-text{color:#b04444!important}.habit-day-strip{display:flex;gap:7px;overflow-x:auto;padding:18px 2px 3px;margin-top:15px;border-top:1px solid var(--line,#edf0f2)}.habit-day-strip button{flex:0 0 48px;height:58px;border:1px solid var(--line,#e1e4e8);border-radius:11px;background:transparent;color:inherit;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer}.habit-day-strip button span{width:25px;height:25px;border-radius:50%;display:grid;place-items:center;border:1px solid #cfd3d8;font-size:10px}.habit-day-strip button small{font-size:9px;color:var(--muted,#858b95);text-transform:uppercase}.habit-day-strip button.completed span{background:#17191e;color:#fff;border-color:#17191e}.habit-day-strip button.completed{background:rgba(23,25,30,.035)}.habit-day-strip button.today{box-shadow:0 0 0 2px var(--accent,#5b4ff5) inset}.habit-day-strip button:disabled{opacity:.38;cursor:not-allowed}.tracker-empty-big .tracker-big-action{margin-top:8px}@media(max-width:760px){.habit-form-grid{grid-template-columns:1fr}.habit-system-card-head{flex-direction:column}.habit-row-actions{justify-content:flex-start}.habit-control-bar{align-items:flex-start;flex-direction:column}.habit-control-bar .tracker-big-action{width:100%;justify-content:center}}
 
 
-/* TRACKEN 3.5.10 — Goals heading + light-mode habit creation fix */
+/* TRACKEN 3.5.11 — Goals heading + light-mode habit creation fix */
 .habit-form-actions .primary-small {
   display:inline-flex !important;
   align-items:center !important;
@@ -11263,7 +11263,7 @@ body,
   min-height:42px;
 }
 
-/* TRACKEN 3.5.10 — Article image caret + resize controls */
+/* TRACKEN 3.5.11 — Article image caret + resize controls */
 .article-editor-label { position: relative; }
 .article-image-toolbar {
   display: flex;
@@ -11298,3 +11298,57 @@ body,
   .article-image-toolbar strong { width: 100%; }
 }
 
+
+
+/* TRACKEN 3.5.11 — project creation and instant task interaction */
+.project-add-button {
+  min-height:40px !important;
+  min-width:108px !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:6px !important;
+  background:var(--accent,#6c63ff) !important;
+  color:#fff !important;
+  border:1px solid var(--accent,#6c63ff) !important;
+  opacity:1 !important;
+  visibility:visible !important;
+  white-space:nowrap !important;
+}
+.project-add-button:hover { filter:brightness(.96); transform:translateY(-1px); }
+.tracken-task .task-delete {
+  opacity:1 !important;
+  visibility:visible !important;
+  display:grid !important;
+  place-items:center !important;
+  width:30px !important;
+  height:30px !important;
+  border:1px solid var(--line) !important;
+  border-radius:9px !important;
+  background:var(--surface-solid,var(--surface,#fff)) !important;
+  color:var(--muted) !important;
+}
+.tracken-task .task-delete:hover { color:#b42318 !important; border-color:rgba(180,35,24,.25) !important; background:rgba(180,35,24,.06) !important; }
+@media (max-width:760px) { .project-add-button { min-width:96px !important; } }
+
+/* TRACKEN 3.5.11 — Project action visibility + task action refinement */
+.tracken-command-center .engine-project-create .project-add-button {
+  background:var(--accent,#6c63ff) !important;
+  color:#fff !important;
+  border:1px solid var(--accent,#6c63ff) !important;
+  opacity:1 !important;
+  visibility:visible !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+.tracken-command-center .engine-project-create .project-add-button svg { color:#fff !important; }
+.tracken-task .task-delete { opacity:1 !important; }
+.tracker-task-row { grid-template-columns:34px minmax(0,1fr) 82px auto !important; }
+.tracker-task-row .task-row-actions { align-items:center; }
+.tracker-task-row .task-row-actions .task-delete-inline { width:34px; height:34px; }
+@media (max-width:650px) {
+  .tracker-task-row { grid-template-columns:32px minmax(0,1fr) auto !important; }
+  .tracker-task-row .task-row-actions { gap:4px; }
+  .tracker-task-row .task-row-actions .task-edit-button { width:31px; height:31px; }
+}
