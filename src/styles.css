@@ -11352,3 +11352,283 @@ body,
   .tracker-task-row .task-row-actions { gap:4px; }
   .tracker-task-row .task-row-actions .task-edit-button { width:31px; height:31px; }
 }
+
+/* TRACKEN 4.1.3 — automation baseline */
+.automation-center-card{grid-column:1/-1}
+.automation-form-grid{display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(120px,1fr));gap:8px;margin-top:15px}
+.automation-form-grid input,.automation-form-grid select{height:42px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--text);padding:0 11px;font-size:10px;min-width:0}
+.automation-form-grid button{min-height:42px;grid-column:span 2}
+.automation-list{display:grid;gap:8px;margin-top:16px}
+.automation-rule{display:grid;grid-template-columns:34px minmax(0,1fr) auto auto auto;align-items:center;gap:10px;padding:11px;border:1px solid var(--line);border-radius:13px;background:var(--bg)}
+.automation-rule.paused{opacity:.68}
+.automation-rule-icon{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+.automation-rule-main{min-width:0}.automation-rule-main b{display:block;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.automation-rule-main small{display:block;color:var(--muted);font-size:9px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.automation-status{font-size:8px;font-weight:900;letter-spacing:.12em;color:var(--accent)}
+.danger-ghost{color:#b23a48!important}
+.automation-empty{display:flex;align-items:center;justify-content:center;gap:10px;padding:18px;border:1px dashed var(--line);border-radius:13px;color:var(--muted)}
+.automation-empty b{display:block;color:var(--text);font-size:11px}.automation-empty small{display:block;font-size:9px;margin-top:3px}
+@media(max-width:900px){.automation-form-grid{grid-template-columns:1fr 1fr}.automation-form-grid button{grid-column:1/-1}.automation-rule{grid-template-columns:34px minmax(0,1fr) auto auto}.automation-rule .danger-ghost{grid-column:auto}}
+@media(max-width:620px){.automation-form-grid{grid-template-columns:1fr}.automation-rule{grid-template-columns:34px minmax(0,1fr) auto}.automation-rule .ghost-small{grid-column:2}.automation-rule .danger-ghost{grid-column:3;grid-row:2}.automation-status{display:none}}
+
+/* =========================================================
+   TRACKEN 4.1.3 — AUTOMATION + LIGHT/DARK CONTROL HARDENING
+   All new automation controls are explicitly themed in both
+   modes so primary actions can never become white-on-white.
+   ========================================================= */
+
+/* Global primary-small definition: previously this was scoped to the
+   command-center shell, which made newer controls inherit poor defaults. */
+.primary-small {
+  min-height:42px;
+  border:1px solid var(--accent) !important;
+  border-radius:10px;
+  background:var(--accent) !important;
+  color:#fff !important;
+  padding:0 14px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  font-size:11px;
+  font-weight:850;
+  line-height:1;
+  opacity:1 !important;
+  visibility:visible !important;
+  box-shadow:0 8px 20px rgba(91,85,246,.14);
+  transition:transform .18s ease,filter .18s ease,box-shadow .18s ease,background .18s ease;
+}
+.primary-small:hover:not(:disabled) {
+  transform:translateY(-1px);
+  filter:brightness(.97);
+  box-shadow:0 11px 25px rgba(91,85,246,.19);
+}
+.primary-small:disabled { opacity:.55 !important; box-shadow:none; }
+
+.ghost-small {
+  min-height:38px;
+  border:1px solid var(--line) !important;
+  border-radius:10px;
+  background:var(--surface-solid) !important;
+  color:var(--text) !important;
+  padding:0 11px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  font-size:11px;
+  font-weight:800;
+  opacity:1 !important;
+  visibility:visible !important;
+}
+.ghost-small:hover { border-color:var(--accent) !important; color:var(--accent) !important; background:var(--accent-soft) !important; }
+
+/* Native controls: consistent readable surfaces in both themes. */
+.automation-form-grid input,
+.automation-form-grid select,
+.goal-automation-form-grid input,
+.goal-automation-form-grid select,
+.goal-form-grid input,
+.goal-form-grid select,
+.goal-form-grid textarea,
+.inline-goal-form input,
+.inline-goal-form select,
+.inline-goal-form textarea {
+  background:var(--surface-solid) !important;
+  color:var(--text) !important;
+  border-color:var(--line) !important;
+  color-scheme:light;
+}
+.automation-form-grid input::placeholder,
+.goal-automation-form-grid input::placeholder,
+.goal-form-grid input::placeholder,
+.goal-form-grid textarea::placeholder { color:var(--muted); opacity:.85; }
+
+/* Recurring task automation — explicit light mode action visibility. */
+:root:not([data-theme="dark"]) .automation-form-grid .primary-small,
+:root:not([data-theme="dark"]) .goal-automation-form-grid .primary-small {
+  background:var(--accent) !important;
+  color:#fff !important;
+  border-color:var(--accent) !important;
+  opacity:1 !important;
+  visibility:visible !important;
+}
+
+.automation-center-card,
+.goal-automation-card { overflow:hidden; }
+.automation-form-grid { align-items:stretch; }
+.automation-form-grid .primary-small { width:100%; }
+.automation-list .ghost-small { white-space:nowrap; }
+
+/* Goal → Task Automation engine. */
+.goal-automation-card { margin:0 0 18px; }
+.goal-automation-card .panel-heading { align-items:flex-start; }
+.goal-automation-form-grid {
+  display:grid;
+  grid-template-columns:minmax(180px,1.2fr) minmax(170px,1.25fr) repeat(3,minmax(110px,.8fr)) minmax(105px,.65fr) minmax(100px,.65fr) minmax(150px,.9fr);
+  gap:8px;
+  margin-top:15px;
+  align-items:stretch;
+}
+.goal-automation-form-grid input,
+.goal-automation-form-grid select {
+  min-width:0;
+  height:42px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:0 11px;
+  font-size:10px;
+  outline:none;
+}
+.goal-automation-form-grid input:focus,
+.goal-automation-form-grid select:focus { border-color:var(--accent) !important; box-shadow:0 0 0 3px var(--accent-soft); }
+.goal-automation-create { min-width:0; }
+.goal-automation-list { margin-top:16px; }
+.goal-automation-list .automation-rule-main small { max-width:100%; }
+
+/* Dark-mode counterpart for every newly touched control/surface. */
+:root[data-theme="dark"] .primary-small {
+  background:var(--accent) !important;
+  color:#fff !important;
+  border-color:var(--accent) !important;
+}
+:root[data-theme="dark"] .ghost-small {
+  background:var(--surface-solid) !important;
+  color:var(--text) !important;
+  border-color:var(--line) !important;
+}
+:root[data-theme="dark"] .automation-form-grid input,
+:root[data-theme="dark"] .automation-form-grid select,
+:root[data-theme="dark"] .goal-automation-form-grid input,
+:root[data-theme="dark"] .goal-automation-form-grid select,
+:root[data-theme="dark"] .goal-form-grid input,
+:root[data-theme="dark"] .goal-form-grid select,
+:root[data-theme="dark"] .goal-form-grid textarea,
+:root[data-theme="dark"] .inline-goal-form input,
+:root[data-theme="dark"] .inline-goal-form select,
+:root[data-theme="dark"] .inline-goal-form textarea {
+  background:var(--surface-solid) !important;
+  color:var(--text) !important;
+  border-color:var(--line) !important;
+  color-scheme:dark;
+}
+:root[data-theme="dark"] .automation-rule,
+:root[data-theme="dark"] .automation-empty {
+  background:var(--bg) !important;
+  border-color:var(--line) !important;
+  color:var(--text);
+}
+:root[data-theme="dark"] .automation-rule-icon { background:var(--accent-soft) !important; color:var(--accent) !important; }
+:root[data-theme="dark"] .danger-ghost { color:#ff9aa7 !important; }
+
+/* Light-mode counterparts for common legacy action controls. */
+:root:not([data-theme="dark"]) .goal-card-actions button,
+:root:not([data-theme="dark"]) .row-actions button,
+:root:not([data-theme="dark"]) .icon-close,
+:root:not([data-theme="dark"]) .icon-button {
+  background:var(--surface-solid) !important;
+  color:var(--text) !important;
+  border-color:var(--line) !important;
+  opacity:1 !important;
+  visibility:visible !important;
+}
+:root:not([data-theme="dark"]) .goal-card-actions button:hover,
+:root:not([data-theme="dark"]) .row-actions button:hover,
+:root:not([data-theme="dark"]) .icon-close:hover,
+:root:not([data-theme="dark"]) .icon-button:hover {
+  border-color:var(--accent) !important;
+  color:var(--accent) !important;
+  background:var(--accent-soft) !important;
+}
+
+/* Tablet/mobile: never let automation controls become cramped or overflow. */
+@media (max-width:1100px) {
+  .goal-automation-form-grid { grid-template-columns:1fr 1fr 1fr; }
+  .goal-automation-form-grid .goal-automation-create { grid-column:1 / -1; }
+}
+@media (max-width:900px) {
+  .automation-form-grid { grid-template-columns:1fr 1fr; }
+  .goal-automation-form-grid { grid-template-columns:1fr 1fr; }
+}
+@media (max-width:620px) {
+  .automation-form-grid,
+  .goal-automation-form-grid { grid-template-columns:1fr; }
+  .automation-form-grid button,
+  .goal-automation-form-grid .goal-automation-create { grid-column:1 / -1; }
+  .automation-rule { grid-template-columns:34px minmax(0,1fr) auto; }
+  .automation-rule .ghost-small { grid-column:2; }
+  .automation-rule .danger-ghost { grid-column:3; grid-row:2; }
+  .automation-status { display:none; }
+}
+
+/* TRACKEN 4.1.3 — HABIT SCHEDULES */
+.habit-form-grid select{height:44px;border:1px solid var(--line,#dfe3e7);border-radius:10px;padding:0 12px;background:var(--surface-solid,#fff);color:var(--text,#17191e);font:inherit;outline:none;}
+.habit-form-grid select:focus{border-color:var(--accent,#5b4ff5);box-shadow:0 0 0 3px var(--accent-soft,#ecebff);}
+.habit-schedule-days{margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:13px;background:var(--bg);}
+.habit-schedule-days>span{display:block;font-size:9px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:9px;}
+.habit-schedule-days>div{display:flex;gap:7px;flex-wrap:wrap;}
+.habit-schedule-days button{height:34px;min-width:48px;padding:0 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface-solid);color:var(--text);font-size:10px;font-weight:850;cursor:pointer;}
+.habit-schedule-days button:hover{border-color:var(--accent);color:var(--accent);}
+.habit-schedule-days button.selected{background:var(--accent);border-color:var(--accent);color:#fff;}
+.habit-schedule-days small{display:block;margin-top:8px;color:var(--muted);font-size:9px;}
+.habit-day-strip button.rest-day{opacity:.42;border-style:dashed;background:transparent;cursor:not-allowed;}
+.habit-day-strip button.rest-day span{border-color:var(--line);}
+.habit-day-strip button.rest-day small{font-size:8px;letter-spacing:.04em;}
+:root:not([data-theme="dark"]) .habit-form-grid select,:root:not([data-theme="dark"]) .habit-schedule-days,:root:not([data-theme="dark"]) .habit-schedule-days button{color-scheme:light;}
+:root[data-theme="dark"] .habit-form-grid select,:root[data-theme="dark"] .habit-schedule-days,:root[data-theme="dark"] .habit-schedule-days button{background:var(--surface-solid)!important;color:var(--text)!important;border-color:var(--line)!important;color-scheme:dark;}
+:root[data-theme="dark"] .habit-schedule-days{background:var(--bg)!important;}
+:root[data-theme="dark"] .habit-schedule-days button.selected{background:var(--accent)!important;color:#fff!important;border-color:var(--accent)!important;}
+@media(max-width:760px){.habit-schedule-days>div{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));}.habit-schedule-days button{width:100%;}.habit-form-grid{grid-template-columns:1fr!important;}}
+
+/* TRACKEN 4.1.3 — Recurring Cashflow Automation */
+.cashflow-automation-card{margin-top:0;}
+.cashflow-automation-form{grid-template-columns:minmax(170px,2fr) repeat(3,minmax(110px,1fr));}
+.cashflow-automation-form input,
+.cashflow-automation-form select{height:42px;background:var(--surface-solid);color:var(--text);border:1px solid var(--line);}
+.cashflow-automation-form input:focus,
+.cashflow-automation-form select:focus{border-color:var(--accent)!important;box-shadow:0 0 0 3px var(--accent-soft);outline:none;}
+.cashflow-automation-form .primary-small{grid-column:span 2;min-width:0;width:100%;}
+.cashflow-automation-card .automation-rule-main b{display:block;}
+.cashflow-automation-card .automation-rule-main small{display:block;}
+:root:not([data-theme="dark"]) .cashflow-automation-form input,
+:root:not([data-theme="dark"]) .cashflow-automation-form select{
+  background:var(--surface-solid,#fff)!important;color:var(--text,#17191e)!important;border-color:var(--line,#dfe3e7)!important;color-scheme:light;
+}
+:root:not([data-theme="dark"]) .cashflow-automation-form .primary-small{
+  background:var(--accent)!important;color:#fff!important;border-color:var(--accent)!important;opacity:1!important;visibility:visible!important;
+}
+:root[data-theme="dark"] .cashflow-automation-form input,
+:root[data-theme="dark"] .cashflow-automation-form select{
+  background:var(--surface-solid)!important;color:var(--text)!important;border-color:var(--line)!important;color-scheme:dark;
+}
+:root[data-theme="dark"] .cashflow-automation-form .primary-small{
+  background:var(--accent)!important;color:#fff!important;border-color:var(--accent)!important;
+}
+@media(max-width:1100px){.cashflow-automation-form{grid-template-columns:1fr 1fr 1fr;}.cashflow-automation-form .primary-small{grid-column:1/-1;}}
+@media(max-width:900px){.cashflow-automation-form{grid-template-columns:1fr 1fr;}}
+@media(max-width:620px){.cashflow-automation-form{grid-template-columns:1fr;}.cashflow-automation-form .primary-small{grid-column:1/-1;}}
+
+/* TRACKEN 4.1.3 — Automatic Daily / Weekly Reviews */
+.review-automation-card{margin-bottom:18px;overflow:hidden;}
+.review-automation-controls{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:15px;}
+.review-automation-controls label{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-solid);color:var(--text);font-size:10px;font-weight:800;cursor:pointer;}
+.review-automation-controls input{accent-color:var(--accent);width:15px;height:15px;}
+.review-automation-controls .primary-small{margin-left:auto;min-height:40px;}
+.review-automation-note{display:flex;align-items:flex-start;gap:8px;margin-top:12px;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;background:var(--bg);color:var(--muted);font-size:9px;line-height:1.5;}
+.review-automation-note svg{flex:0 0 auto;margin-top:1px;color:var(--accent);}
+.review-snapshot-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:15px;}
+.review-snapshot{min-width:0;padding:13px;border:1px solid var(--line);border-radius:13px;background:var(--surface-solid);}
+.review-snapshot>div{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.review-snapshot>div span{font-size:8px;font-weight:900;letter-spacing:.12em;color:var(--accent);}
+.review-snapshot>div small{font-size:8px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.review-snapshot>strong{display:block;margin-top:13px;font-size:18px;letter-spacing:-.04em;}
+.review-snapshot>p{margin:5px 0 9px;color:var(--muted);font-size:9px;line-height:1.45;}
+.review-snapshot>em{display:block;padding-top:9px;border-top:1px solid var(--line);font-style:normal;color:var(--text);font-size:9px;line-height:1.45;}
+.review-empty-state{grid-column:1/-1;padding:20px;border:1px dashed var(--line);border-radius:13px;color:var(--muted);font-size:10px;text-align:center;}
+:root:not([data-theme="dark"]) .review-automation-controls label{background:var(--surface-solid)!important;color:var(--text)!important;border-color:var(--line)!important;opacity:1!important;}
+:root:not([data-theme="dark"]) .review-automation-controls .primary-small{background:var(--accent)!important;color:#fff!important;border-color:var(--accent)!important;opacity:1!important;visibility:visible!important;}
+:root:not([data-theme="dark"]) .review-snapshot{background:var(--surface-solid)!important;color:var(--text)!important;border-color:var(--line)!important;}
+:root[data-theme="dark"] .review-automation-controls label{background:var(--surface-solid)!important;color:var(--text)!important;border-color:var(--line)!important;}
+:root[data-theme="dark"] .review-automation-note{background:var(--bg)!important;color:var(--muted)!important;border-color:var(--line)!important;}
+:root[data-theme="dark"] .review-snapshot{background:var(--surface-solid)!important;color:var(--text)!important;border-color:var(--line)!important;}
+@media(max-width:900px){.review-snapshot-grid{grid-template-columns:1fr 1fr;}.review-automation-controls .primary-small{margin-left:0;}}
+@media(max-width:620px){.review-automation-controls{display:grid;grid-template-columns:1fr 1fr;}.review-automation-controls label{width:100%;}.review-automation-controls .primary-small{grid-column:1/-1;width:100%;}.review-snapshot-grid{grid-template-columns:1fr;}}

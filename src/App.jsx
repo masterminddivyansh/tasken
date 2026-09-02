@@ -5,6 +5,20 @@ import {
   CalendarDays, Flag, Plus, Trash2, LayoutDashboard, ListChecks, Clock3, BookOpen, Flame, Trophy, TrendingUp, PieChart, Sparkles, ChevronRight, PanelLeftClose, PanelLeftOpen, Award, Timer, HelpCircle, Bell, ShieldCheck, Users, Send, Search, CheckCheck, Megaphone, UserCheck, ChevronDown, Info, PenLine, LockKeyhole, Cookie, Scale, Heart, ClipboardList, LogOut, WalletCards, Receipt, CircleDollarSign, Landmark, BriefcaseBusiness, TrendingDown, Percent, RotateCcw, Medal
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
+import FinanceEngine from "./components/FinanceEngine";
+
+// Shared finance panel heading used by the detailed Investment and Net Worth views.
+function PanelHead({ kicker, title, icon }) {
+  return (
+    <div className="panel-heading">
+      <div>
+        <span className="card-kicker">{kicker}</span>
+        <h2>{title}</h2>
+      </div>
+      {icon}
+    </div>
+  );
+}
 
 const features = [
   { icon: ClipboardCheck, title: "Smart To-Do", text: "Plan the work that matters and move completed tasks out of the way." },
@@ -15,7 +29,7 @@ const features = [
   { icon: BarChart3, title: "Analytics", text: "Understand your strongest days, weak spots and long-term improvement." }
 ];
 
-class taskenErrorBoundary extends Component {
+class TaskenErrorBoundary extends Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, message: "" };
@@ -66,15 +80,15 @@ function useSyncedUserState(userId, column, initialValue, delay = 300) {
     habits: "tracken-habits", tracked_seconds: "tracken-time-today", time_running: "tracken-time-running",
     focus_sessions: "tracken-focus-sessions", activity_log: "tracken-activity-log", money: "tracken-money",
     investments: "tracken-investments", assets: "tracken-assets", liabilities: "tracken-liabilities",
-    monthly_budget: "tracken-monthly-budget", projects: "tracken-projects", task_meta: "tracken-task-meta",
-    daily_capacity: "tracken-daily-capacity", runway_start: "tracken-runway-start"
+    monthly_budget: "tracken-monthly-budget", budget_categories: "tracken-budget-categories", finance_goals: "tracken-finance-goals", finance_goal_plans: "tracken-finance-goal-plans", projects: "tracken-projects", task_meta: "tracken-task-meta",
+    daily_capacity: "tracken-daily-capacity", runway_start: "tracken-runway-start", cashflow_automation_rules: "tracken-cashflow-automation-rules"
   };
   const getInitial = () => {
     try {
       const cached = localStorage.getItem(`tracken-state-${column}-${userId}`);
-      if (cached !== null) return JSON.parse(cached);
+      if (cached !== null) { const parsed = JSON.parse(cached); return Array.isArray(initialValue) && !Array.isArray(parsed) ? initialValue : parsed; }
       const legacy = legacyKeys[column] ? localStorage.getItem(legacyKeys[column]) : null;
-      if (legacy !== null) return JSON.parse(legacy);
+      if (legacy !== null) { const parsed = JSON.parse(legacy); return Array.isArray(initialValue) && !Array.isArray(parsed) ? initialValue : parsed; }
       return initialValue;
     } catch { return initialValue; }
   };
@@ -86,7 +100,7 @@ function useSyncedUserState(userId, column, initialValue, delay = 300) {
     (async () => {
       const { data, error } = await supabase.from("user_app_state").select(column).eq("user_id", userId).maybeSingle();
       if (cancelled) return;
-      if (!error && data && data[column] !== null && data[column] !== undefined) setValue(data[column]);
+      if (!error && data && data[column] !== null && data[column] !== undefined) { const remoteValue = data[column]; setValue(Array.isArray(initialValue) && !Array.isArray(remoteValue) ? initialValue : remoteValue); }
       setHydrated(true);
     })();
     return () => { cancelled = true; };
@@ -110,11 +124,11 @@ function clearTrackenLocalCache(userId) {
     "tracken-state-habits-", "tracken-state-tracked_seconds-", "tracken-state-time_running-",
     "tracken-state-focus_sessions-", "tracken-state-activity_log-", "tracken-state-money-",
     "tracken-state-investments-", "tracken-state-assets-", "tracken-state-liabilities-",
-    "tracken-state-monthly_budget-", "tracken-state-projects-", "tracken-state-task_meta-",
-    "tracken-state-daily_capacity-", "tracken-state-runway_start-"
+    "tracken-state-monthly_budget-", "tracken-state-budget_categories-", "tracken-state-finance_goals-", "tracken-state-finance_goal_plans-", "tracken-state-projects-", "tracken-state-task_meta-",
+    "tracken-state-daily_capacity-", "tracken-state-runway_start-", "tracken-state-cashflow_automation_rules-"
   ];
   prefixes.forEach(prefix => localStorage.removeItem(`${prefix}${userId}`));
-  ["tracken-habits", "tracken-time-today", "tracken-time-running", "tracken-focus-sessions", "tracken-activity-log", "tracken-money", "tracken-investments", "tracken-assets", "tracken-liabilities", "tracken-monthly-budget", "tracken-projects", "tracken-task-meta", "tracken-daily-capacity", "tracken-runway-start"].forEach(k => localStorage.removeItem(k));
+  ["tracken-habits", "tracken-time-today", "tracken-time-running", "tracken-focus-sessions", "tracken-activity-log", "tracken-money", "tracken-investments", "tracken-assets", "tracken-liabilities", "tracken-monthly-budget", "tracken-budget-categories", "tracken-finance-goals", "tracken-finance-goal-plans", "tracken-projects", "tracken-task-meta", "tracken-daily-capacity", "tracken-runway-start", "tracken-cashflow-automation-rules"].forEach(k => localStorage.removeItem(k));
   localStorage.removeItem(`tracken-avatar-${userId}`);
 }
 
@@ -213,15 +227,15 @@ function App() {
 
   if (session) {
     return (
-      <taskenErrorBoundary>
+      <TaskenErrorBoundary>
         <Dashboard session={session} theme={theme} toggleTheme={toggleTheme} onLogout={() => setPublicPage("home")} />
-      </taskenErrorBoundary>
+      </TaskenErrorBoundary>
     );
   }
 
   if (authView) {
     return (
-      <taskenErrorBoundary>
+      <TaskenErrorBoundary>
       <AuthPage
         mode={authView}
         setMode={setAuthView}
@@ -229,25 +243,25 @@ function App() {
         toggleTheme={toggleTheme}
         onBack={() => setAuthView(null)}
       />
-      </taskenErrorBoundary>
+      </TaskenErrorBoundary>
     );
   }
 
   if (publicPage === "blog-post" && selectedBlogPost) {
-    return <taskenErrorBoundary><BlogPostPage post={selectedBlogPost} theme={theme} toggleTheme={toggleTheme} onBack={() => { setSelectedBlogPost(null); setPublicPage("blog"); }} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => setPublicPage("contact")} onNavigate={setPublicPage} /></taskenErrorBoundary>;
+    return <TaskenErrorBoundary><BlogPostPage post={selectedBlogPost} theme={theme} toggleTheme={toggleTheme} onBack={() => { setSelectedBlogPost(null); setPublicPage("blog"); }} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => setPublicPage("contact")} onNavigate={setPublicPage} /></TaskenErrorBoundary>;
   }
 
   if (publicPage === "blog") {
-    return <taskenErrorBoundary><BlogPage theme={theme} toggleTheme={toggleTheme} onBack={() => setPublicPage("home")} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => setPublicPage("contact")} onNavigate={setPublicPage} onOpenPost={(post) => { setSelectedBlogPost(post); setPublicPage("blog-post"); }} /></taskenErrorBoundary>;
+    return <TaskenErrorBoundary><BlogPage theme={theme} toggleTheme={toggleTheme} onBack={() => setPublicPage("home")} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => setPublicPage("contact")} onNavigate={setPublicPage} onOpenPost={(post) => { setSelectedBlogPost(post); setPublicPage("blog-post"); }} /></TaskenErrorBoundary>;
   }
 
   if (["about", "privacy", "terms", "cookies", "disclaimer", "advertising"].includes(publicPage)) {
-    return <taskenErrorBoundary><LegalPage page={publicPage} theme={theme} toggleTheme={toggleTheme} onBack={() => setPublicPage("home")} onLogin={() => setAuthView("login")} onNavigate={setPublicPage} /></taskenErrorBoundary>;
+    return <TaskenErrorBoundary><LegalPage page={publicPage} theme={theme} toggleTheme={toggleTheme} onBack={() => setPublicPage("home")} onLogin={() => setAuthView("login")} onNavigate={setPublicPage} /></TaskenErrorBoundary>;
   }
 
   if (publicPage === "contact") {
     return (
-      <taskenErrorBoundary>
+      <TaskenErrorBoundary>
         <ContactPage
           theme={theme}
           toggleTheme={toggleTheme}
@@ -256,12 +270,12 @@ function App() {
           onBlog={() => setPublicPage("blog")}
           onNavigate={setPublicPage}
         />
-      </taskenErrorBoundary>
+      </TaskenErrorBoundary>
     );
   }
 
   return (
-    <taskenErrorBoundary>
+    <TaskenErrorBoundary>
       <LandingHome
         theme={theme}
         toggleTheme={toggleTheme}
@@ -271,7 +285,7 @@ function App() {
         onContact={() => setPublicPage("contact")}
         onNavigate={setPublicPage}
       />
-    </taskenErrorBoundary>
+    </TaskenErrorBoundary>
   );
 }
 
@@ -982,6 +996,8 @@ function Dashboard({ session, theme, toggleTheme, onLogout }) {
   const [timeRunning, setTimeRunning] = useSyncedUserState(userId, "time_running", false, 1500);
   const [completedFocusSessions, setCompletedFocusSessions] = useSyncedUserState(userId, "focus_sessions", 0);
   const [activityLog, setActivityLog] = useSyncedUserState(userId, "activity_log", [], 2000);
+  const [reviewAutomation, setReviewAutomation] = useSyncedUserState(userId, "review_automation", { daily: true, weekly: true }, 1200);
+  const [reviewSnapshots, setReviewSnapshots] = useSyncedUserState(userId, "review_snapshots", [], 1500);
 
   useEffect(() => { document.body.classList.toggle("tasken-mobile-sidebar-open", mobileSidebarOpen); return () => document.body.classList.remove("tasken-mobile-sidebar-open"); }, [mobileSidebarOpen]);
   useEffect(() => { const openGoals = () => setShowTracker("goals"); window.addEventListener("tracken-open-goals", openGoals); return () => window.removeEventListener("tracken-open-goals", openGoals); }, []);
@@ -1035,8 +1051,20 @@ function Dashboard({ session, theme, toggleTheme, onLogout }) {
   const goalProgress = topGoal?.target_value > 0 ? Math.min(100, Math.round((Number(topGoal.current_value || 0) / Number(topGoal.target_value)) * 100)) : 0;
   const studyScore = Math.min(100, Math.round((Math.min(record.lecture_minutes / 180, 1) * 45) + (Math.min(record.questions_done / 100, 1) * 25) + (record.exercise_done ? 15 : 0) + (Math.min(record.pages_read / 40, 1) * 15)));
   const todayHabitKey = todayKey;
-  const habitDoneToday = (h) => Array.isArray(h.completedDates) ? h.completedDates.includes(todayHabitKey) : Boolean(h.done);
-  const activeHabitsToday = habits.filter(h => !h.startDate || !h.durationDays || (() => { const start = new Date(`${h.startDate}T12:00:00`); const d = new Date(`${todayHabitKey}T12:00:00`); const end = new Date(start); end.setDate(end.getDate() + Number(h.durationDays) - 1); return d >= start && d <= end; })());
+  const dashboardHabitScheduledOn = (h, dateKey) => {
+    const day = new Date(`${dateKey}T12:00:00`).getDay();
+    if (h?.scheduleType === "weekdays") return day >= 1 && day <= 5;
+    if (h?.scheduleType === "custom") return Array.isArray(h.scheduleDays) && h.scheduleDays.includes(day);
+    return true;
+  };
+  const habitDoneToday = (h) => dashboardHabitScheduledOn(h, todayHabitKey) && (Array.isArray(h.completedDates) ? h.completedDates.includes(todayHabitKey) : Boolean(h.done));
+  const activeHabitsToday = habits.filter(h => {
+    if (h.startDate && h.durationDays) {
+      const start = new Date(`${h.startDate}T12:00:00`); const d = new Date(`${todayHabitKey}T12:00:00`); const end = new Date(start); end.setDate(end.getDate() + Number(h.durationDays) - 1);
+      if (!(d >= start && d <= end)) return false;
+    }
+    return dashboardHabitScheduledOn(h, todayHabitKey);
+  });
   const consistencyScore = activeHabitsToday.length ? Math.round((activeHabitsToday.filter(h => habitDoneToday(h)).length / activeHabitsToday.length) * 100) : 0;
   const focusScore = Math.min(100, Math.round((trackedSeconds / 3600) * 100));
   const goalScore = activeGoals.length ? goalProgress : 0;
@@ -1047,6 +1075,34 @@ function Dashboard({ session, theme, toggleTheme, onLogout }) {
   const formatTime = (seconds) => { const total=Math.max(0,Number(seconds)||0); return `${Math.floor(total / 3600)}h ${String(Math.floor((total % 3600) / 60)).padStart(2, "0")}m ${String(total % 60).padStart(2, "0")}s`; };
   const formatFocus = (seconds) => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   const logActivity = (type, label, value=1) => setActivityLog((c) => [...c, { id: crypto.randomUUID(), type, label, value, at: new Date().toISOString() }].slice(-250));
+  const reviewDateKey = (date) => { const y=date.getFullYear(); const m=String(date.getMonth()+1).padStart(2,"0"); const d=String(date.getDate()).padStart(2,"0"); return `${y}-${m}-${d}`; };
+  const buildReviewSnapshot = (type, start, end) => {
+    const startKey=reviewDateKey(start), endKey=reviewDateKey(end);
+    const periodTasks=tasks.filter(t=>t.task_date>=startKey && t.task_date<=endKey);
+    const completed=periodTasks.filter(t=>t.status==="completed").length;
+    const periodRecords=history.filter(r=>r.record_date>=startKey && r.record_date<=endKey);
+    const studyMinutes=periodRecords.reduce((sum,r)=>sum+Number(r.lecture_minutes||0),0);
+    const questions=periodRecords.reduce((sum,r)=>sum+Number(r.questions_done||0),0);
+    const events=activityLog.filter(e=>{const k=String(e.at||"").slice(0,10);return k>=startKey&&k<=endKey;});
+    const focusMinutes=events.filter(e=>e.type==="focus_completed").reduce((sum,e)=>sum+Number(e.value||0),0);
+    let habitScheduled=0, habitCompleted=0;
+    habits.forEach(h=>{ const cursor=new Date(`${startKey}T12:00:00`); const stop=new Date(`${endKey}T12:00:00`); while(cursor<=stop){ const key=reviewDateKey(cursor); const day=cursor.getDay(); const scheduled=h.scheduleType==="weekdays" ? day>=1&&day<=5 : h.scheduleType==="custom" ? Array.isArray(h.scheduleDays)&&h.scheduleDays.includes(day) : true; if(scheduled){habitScheduled++; if(Array.isArray(h.completedDates)?h.completedDates.includes(key):Boolean(h.done)&&key===endKey) habitCompleted++;} cursor.setDate(cursor.getDate()+1); } });
+    const taskPct=periodTasks.length?Math.round(completed/periodTasks.length*100):0;
+    const habitPct=habitScheduled?Math.round(habitCompleted/habitScheduled*100):0;
+    const goal=goals.find(g=>g.status==="active");
+    const goalPct=goal?.target_value?Math.min(100,Math.round(Number(goal.current_value||0)/Number(goal.target_value)*100)):0;
+    const strongest=taskPct>=80?"Execution":studyMinutes>=(type==="weekly"?300:60)?"Study":habitPct>=70?"Consistency":"Momentum";
+    const next=taskPct<70?"Finish one high-impact task before adding new work.":studyMinutes<(type==="weekly"?300:60)?"Protect a focused study block in the next cycle.":habitPct<70?"Make one scheduled habit easier to complete consistently.":goalPct<50&&goal?`Move ${goal.title} forward with one concrete action.`:"Keep the current rhythm and raise the quality bar slightly.";
+    return {id:crypto.randomUUID(),key:`${type}:${startKey}:${endKey}`,type,periodStart:startKey,periodEnd:endKey,createdAt:new Date().toISOString(),metrics:{tasksTotal:periodTasks.length,tasksDone:completed,taskPct,studyMinutes,questions,focusMinutes,habitScheduled,habitCompleted,habitPct,goalPct},strongest,next};
+  };
+  const materializeAutomaticReviews = () => {
+    const settings={daily:true,weekly:true,...(reviewAutomation||{})};
+    const now=new Date(); const additions=[]; const existing=new Set((reviewSnapshots||[]).map(x=>x.key));
+    if(settings.daily){ const end=new Date(now); end.setDate(now.getDate()-1); end.setHours(0,0,0,0); const start=new Date(end); if(!existing.has(`daily:${reviewDateKey(start)}:${reviewDateKey(end)}`)) additions.push(buildReviewSnapshot("daily",start,end)); }
+    if(settings.weekly){ const monday=new Date(now); monday.setHours(0,0,0,0); monday.setDate(now.getDate()-((now.getDay()+6)%7)); const end=new Date(monday); end.setDate(monday.getDate()-1); const start=new Date(end); start.setDate(end.getDate()-6); const key=`weekly:${reviewDateKey(start)}:${reviewDateKey(end)}`; if(!existing.has(key)) additions.push(buildReviewSnapshot("weekly",start,end)); }
+    if(additions.length) setReviewSnapshots(current=>[...additions,...(current||[])].slice(0,24));
+  };
+  useEffect(()=>{ if(!loading) materializeAutomaticReviews(); },[loading,tasks.length,history.length,habits.length,goals.length,activityLog.length,reviewAutomation.daily,reviewAutomation.weekly]);
   const addTask = () => {
     const title = newTask.trim();
     if (!title) return;
@@ -1085,16 +1141,22 @@ function Dashboard({ session, theme, toggleTheme, onLogout }) {
   const updateRecord = (field, value) => { const numeric = ["lectures_watched", "lecture_minutes", "questions_done", "pages_read"]; setRecord((c) => ({ ...c, [field]: numeric.includes(field) ? Math.max(0, Number(value) || 0) : value })); };
   const dailyScore = Math.min(100, Math.round((Math.min(record.lectures_watched / 4, 1) * 20) + (Math.min(record.lecture_minutes / 180, 1) * 20) + (Math.min(record.questions_done / 150, 1) * 25) + (Math.min(record.pages_read / 50, 1) * 15) + (record.exercise_done ? 20 : 0)));
   const saveRecord = async () => { if (savingRecord) return; setSavingRecord(true); const { data, error: e } = await supabase.from("daily_records").upsert({ user_id: userId, record_date: selectedDate, ...record, daily_score: dailyScore, updated_at: new Date().toISOString() }, { onConflict: "user_id,record_date" }).select().single(); if (e) setError(e.message); else { setHistory((c) => [data, ...c.filter((x) => x.record_date !== selectedDate)].slice(0, 90)); logActivity("study_logged", `Study · ${record.lecture_minutes || 0} min`, Number(record.lecture_minutes || 0)); } setSavingRecord(false); };
-  const toggleHabit = (id) => setHabits((c) => c.map((h) => { const dates = Array.isArray(h.completedDates) ? [...h.completedDates] : (h.done ? [todayHabitKey] : []); const done = dates.includes(todayHabitKey); const nextDates = done ? dates.filter(d => d !== todayHabitKey) : [...new Set([...dates, todayHabitKey])]; if (!done) logActivity("habit_completed", h.title); return h.id === id ? { ...h, completedDates: nextDates, done: !done } : h; }));
-  const addHabit = () => { const title = window.prompt("Habit name"); if (title?.trim()) setHabits((c) => [...c, { id: crypto.randomUUID(), title: title.trim(), startDate: todayHabitKey, durationDays: 30, completedDates: [] }]); };
+  const toggleHabit = (id) => setHabits((c) => c.map((h) => {
+    if (h.id !== id || !dashboardHabitScheduledOn(h, todayHabitKey)) return h;
+    const dates = Array.isArray(h.completedDates) ? [...h.completedDates] : (h.done ? [todayHabitKey] : []);
+    const done = dates.includes(todayHabitKey); const nextDates = done ? dates.filter(d => d !== todayHabitKey) : [...new Set([...dates, todayHabitKey])];
+    if (!done) logActivity("habit_completed", h.title);
+    return { ...h, completedDates: nextDates, done: nextDates.includes(todayHabitKey) };
+  }));
+  const addHabit = () => { const title = window.prompt("Habit name"); if (title?.trim()) setHabits((c) => [...c, { id: crypto.randomUUID(), title: title.trim(), startDate: todayHabitKey, durationDays: 30, scheduleType:"daily", scheduleDays:[0,1,2,3,4,5,6], completedDates: [] }]); };
   const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   const toggleSidebar = () => setSidebarCollapsed((c) => { const n = !c; localStorage.setItem("tasken-sidebar-collapsed", String(n)); return n; });
   const handleLogout = async () => { setError(""); const { error: logoutError } = await supabase.auth.signOut(); if (logoutError) return setError(logoutError.message); onLogout?.(); };
   if (showProfile) return <ProfilePage session={session} profile={profile} setProfile={setProfile} theme={theme} toggleTheme={toggleTheme} onBack={() => setShowProfile(false)} />;
   if (showAnalytics) return <AnalyticsPage session={session} theme={theme} toggleTheme={toggleTheme} history={history} tasks={tasks} goals={goals} onBack={() => setShowAnalytics(false)} />;
-  if (showWeeklyReview) return <WeeklyReviewPage session={session} theme={theme} toggleTheme={toggleTheme} tasks={tasks} history={history} goals={goals} habits={habits} activityLog={activityLog} trackedSeconds={trackedSeconds} completedFocusSessions={completedFocusSessions} score={score} onBack={() => setShowWeeklyReview(false)} />;
+  if (showWeeklyReview) return <WeeklyReviewPage session={session} theme={theme} toggleTheme={toggleTheme} tasks={tasks} history={history} goals={goals} habits={habits} activityLog={activityLog} trackedSeconds={trackedSeconds} completedFocusSessions={completedFocusSessions} score={score} reviewAutomation={reviewAutomation} setReviewAutomation={setReviewAutomation} reviewSnapshots={reviewSnapshots} onGenerateReviews={materializeAutomaticReviews} onBack={() => setShowWeeklyReview(false)} />;
   if (showCalendar) return <CalendarHistoryPage session={session} theme={theme} toggleTheme={toggleTheme} onBack={() => setShowCalendar(false)} />;
-  if (showTracker) return <TrackerHubPage initialTab={showTracker} session={session} theme={theme} toggleTheme={toggleTheme} tasks={tasks} setTasks={setTasks} history={history} goals={goals} setGoals={setGoals} habits={habits} setHabits={setHabits} trackedSeconds={trackedSeconds} setTrackedSeconds={setTrackedSeconds} focusSeconds={focusSeconds} setFocusSeconds={setFocusSeconds} focusRunning={focusRunning} setFocusRunning={setFocusRunning} focusPreset={focusPreset} setFocusPreset={setFocusPreset} formatTime={formatTime} formatFocus={formatFocus} timeRunning={timeRunning} setTimeRunning={setTimeRunning} toggleTask={toggleTask} deleteTask={deleteTask} onBack={() => setShowTracker(null)} onTasks={scrollTo} />;
+  if (showTracker) return <TaskenErrorBoundary><TrackerHubPage initialTab={showTracker} session={session} theme={theme} toggleTheme={toggleTheme} tasks={tasks} setTasks={setTasks} history={history} goals={goals} setGoals={setGoals} habits={habits} setHabits={setHabits} trackedSeconds={trackedSeconds} setTrackedSeconds={setTrackedSeconds} focusSeconds={focusSeconds} setFocusSeconds={setFocusSeconds} focusRunning={focusRunning} setFocusRunning={setFocusRunning} focusPreset={focusPreset} setFocusPreset={setFocusPreset} formatTime={formatTime} formatFocus={formatFocus} timeRunning={timeRunning} setTimeRunning={setTimeRunning} toggleTask={toggleTask} deleteTask={deleteTask} onBack={() => setShowTracker(null)} onTasks={scrollTo} /></TaskenErrorBoundary>;
   if (showUpdates) return <UpdatesPage session={session} theme={theme} toggleTheme={toggleTheme} onBack={() => setShowUpdates(false)} onUnreadChange={setUnreadUpdates} />;
   if (showAdmin) return <AdminPage session={session} theme={theme} toggleTheme={toggleTheme} onBack={() => setShowAdmin(false)} />;
 
@@ -1112,6 +1174,7 @@ function Dashboard({ session, theme, toggleTheme, onLogout }) {
           <button className="sidebar-item" onClick={() => setShowTracker("productivity")}><BriefcaseBusiness size={18} /><span className="sidebar-item-label">Productivity Engine</span></button>
           <div className="sidebar-section-label">MONEY</div>
           <button className="sidebar-item" onClick={() => setShowTracker("money")}><WalletCards size={18} /><span className="sidebar-item-label">Cashflow</span></button>
+          <button className="sidebar-item" onClick={() => setShowTracker("budget")}><PieChart size={18} /><span className="sidebar-item-label">Budget</span></button>
           <button className="sidebar-item" onClick={() => setShowTracker("investments")}><BriefcaseBusiness size={18} /><span className="sidebar-item-label">Investments</span></button>
           <div className="sidebar-section-label">INSIGHTS</div>
           <button className="sidebar-item" onClick={() => setShowAnalytics(true)}><TrendingUp size={18} /><span className="sidebar-item-label">Analytics</span></button>
@@ -1121,7 +1184,7 @@ function Dashboard({ session, theme, toggleTheme, onLogout }) {
           <button className={`sidebar-item ${unreadUpdates ? "has-unread" : ""}`} onClick={() => setShowUpdates(true)}><Bell size={18} /><span className="sidebar-item-label">Updates</span>{unreadUpdates ? <span className="sidebar-count unread-count">{unreadUpdates}</span> : null}</button>
           {isAdmin && <button className="sidebar-item" onClick={() => setShowAdmin(true)}><ShieldCheck size={18} /><span className="sidebar-item-label">Admin</span></button>}
         </nav>
-        <div className="sidebar-spacer" /><div className="tracken-sidebar-score"><span>TRACKEN SCORE</span><strong>{score}</strong><small>{scoreLabel}</small></div><div className="tasken-sidebar-version">3.5.12 TRACKEN</div>
+        <div className="sidebar-spacer" /><div className="tracken-sidebar-score"><span>TRACKEN SCORE</span><strong>{score}</strong><small>{scoreLabel}</small></div><div className="tasken-sidebar-version">4.1.3 TRACKEN</div>
       </aside>
       <button className="mobile-sidebar-overlay" aria-label="Close navigation" onClick={() => setMobileSidebarOpen(false)}></button>
       <main className="dashboard-main tasken-main tracken-main">
@@ -1170,13 +1233,13 @@ function Dashboard({ session, theme, toggleTheme, onLogout }) {
             </article>
           </section>
           <section className="tracken-grid-three">
-            <article className="tracken-panel" id="track-habits"><div className="panel-heading"><div><span className="card-kicker">CONSISTENCY</span><h2>Habits</h2></div><button className="ghost-small" onClick={()=>setShowTracker("habits")}><Plus size={15}/> New</button></div><div className="habit-list">{habits.length ? habits.map(h=><button className={`habit-row ${habitDoneToday(h)?"done":""}`} key={h.id} onClick={()=>toggleHabit(h.id)}><span className="habit-dot">{habitDoneToday(h)?<Check size={13}/>:null}</span><b>{h.title}</b><small>{habitDoneToday(h)?"Completed today":"Open today"}</small></button>) : <div className="tracken-empty"><Flame size={20}/><b>Build your first streak.</b><span>Add a habit you want to make automatic.</span></div>}</div></article>
+            <article className="tracken-panel" id="track-habits"><div className="panel-heading"><div><span className="card-kicker">CONSISTENCY</span><h2>Habits</h2></div><button className="ghost-small" onClick={()=>setShowTracker("habits")}><Plus size={15}/> New</button></div><div className="habit-list">{habits.length ? habits.map(h=><button className={`habit-row ${habitDoneToday(h)?"done":""}`} key={h.id} onClick={()=>toggleHabit(h.id)}><span className="habit-dot">{habitDoneToday(h)?<Check size={13}/>:null}</span><b>{h.title}</b><small>{habitDoneToday(h)?"Completed today":dashboardHabitScheduledOn(h,todayHabitKey)?"Open today":"Rest day"}</small></button>) : <div className="tracken-empty"><Flame size={20}/><b>Build your first streak.</b><span>Add a habit you want to make automatic.</span></div>}</div></article>
             <article className="tracken-panel" id="track-study"><div className="panel-heading"><div><span className="card-kicker">STUDY ENGINE</span><h2>Daily study</h2></div><span className="mini-score">{dailyScore}</span></div><div className="study-inputs"><label>Lectures<input type="number" min="0" value={record.lectures_watched} onChange={(e)=>updateRecord("lectures_watched",e.target.value)}/></label><label>Minutes<input type="number" min="0" value={record.lecture_minutes} onChange={(e)=>updateRecord("lecture_minutes",e.target.value)}/></label><label>Questions<input type="number" min="0" value={record.questions_done} onChange={(e)=>updateRecord("questions_done",e.target.value)}/></label><label>Pages<input type="number" min="0" value={record.pages_read} onChange={(e)=>updateRecord("pages_read",e.target.value)}/></label></div><label className={`exercise-toggle ${record.exercise_done?"done":""}`}><input type="checkbox" checked={record.exercise_done} onChange={(e)=>updateRecord("exercise_done",e.target.checked)}/><span>{record.exercise_done?<Check size={15}/>:null}</span>Exercise completed</label><button className="save-wide" onClick={saveRecord}>{savingRecord?"Saving…":"Save today's study"}<Save size={15}/></button></article>
             <article className="tracken-panel" id="track-focus"><div className="panel-heading"><div><span className="card-kicker">FOCUS & TIME</span><h2>Deep work</h2></div><Timer size={19}/></div><div className="focus-clock">{formatFocus(focusSeconds)}</div><div className="focus-presets">{[25,50,90].map(p=><button className={focusPreset===p?"selected":""} key={p} onClick={()=>{setFocusPreset(p);setFocusSeconds(p*60);setFocusRunning(false)}}>{p}m</button>)}</div><div className="focus-actions"><button className="primary-small" onClick={()=>setFocusRunning(v=>!v)}>{focusRunning?"Pause":"Start focus"}</button><button className="ghost-small" onClick={()=>{setFocusRunning(false);setFocusSeconds(focusPreset*60)}}>Reset</button></div><div className="time-tracker"><div><span>TIME TRACKER</span><b>{formatTime(trackedSeconds)}</b></div><button className={timeRunning?"running":""} onClick={()=>setTimeRunning(v=>!v)}>{timeRunning?"Stop":"Start"}</button></div></article>
           </section>
           <section className="tracken-grid-main bottom-grid"><article className="tracken-panel goal-panel"><div className="panel-heading"><div><span className="card-kicker">DESTINATION</span><h2>Goal momentum</h2></div><button className="ghost-small" onClick={()=>setShowTracker("goals")}>Manage <ChevronRight size={14}/></button></div>{topGoal?<><div className="goal-title-row"><div><b>{topGoal.title}</b><small>{topGoal.category||"Personal goal"}</small></div><strong>{goalProgress}%</strong></div><div className="big-progress"><i style={{width:`${goalProgress}%`}}/></div><div className="goal-meta"><span><b>{topGoal.current_value||0}</b> {topGoal.unit||"progress"}</span><span>{topGoal.target_date?`${Math.max(0,Math.ceil((new Date(`${topGoal.target_date}T12:00:00`)-today)/86400000))} days left`:"No deadline"}</span></div></>:<button className="goal-empty" onClick={()=>setShowTracker("goals")}><Target size={23}/><b>Give your effort a destination.</b><span>Create your first goal →</span></button>}</article><article className="tracken-panel insight-panel"><div className="panel-heading"><div><span className="card-kicker">TRACKEN INSIGHT</span><h2>One thing to improve</h2></div><Sparkles size={18}/></div><div className="insight-copy"><div className="insight-icon"><Zap size={19}/></div><div><b>{taskProgress < 70 ? "Close your task loop." : weeklyStudyMinutes < 300 ? "Protect a daily study block." : "Keep your current rhythm."}</b><p>{taskProgress < 70 ? "You have unfinished work today. Pick one high-impact task and finish it before adding more." : weeklyStudyMinutes < 300 ? "Your study engine has room to compound. A consistent 45–60 minute block can move the weekly curve." : "Your recent activity is balanced. Keep the system simple and repeat what is working."}</p></div></div><button className="insight-link" onClick={()=>setShowAnalytics(true)}>Open full analytics <ArrowRight size={15}/></button></article></section>
           <section className="achievement-strip" id="track-achievements"><div><Trophy size={20}/><div><span>ACHIEVEMENTS</span><b>Make progress visible.</b></div></div><div className="achievement-items"><span><Flame size={15}/> {Math.max(1, history.length)} active days</span><span><Clock3 size={15}/> {Math.floor(totalStudyMinutes/60)}h total study</span><span><CheckCheck size={15}/> {tasks.filter(t=>t.status==="completed").length} tasks completed</span></div></section>
-          <footer className="dashboard-product-footer"><div><strong>TRACKEN <span>by MMD</span></strong><small>Made with DeepIntelligence</small></div><span>Personal Progress OS · 3.5.12</span></footer>
+          <footer className="dashboard-product-footer"><div><strong>TRACKEN <span>by MMD</span></strong><small>Made with DeepIntelligence</small></div><span>Personal Progress OS · 4.1.3</span></footer>
         </div>
       </main>
     </div>
@@ -1184,18 +1247,31 @@ function Dashboard({ session, theme, toggleTheme, onLogout }) {
 }
 
 
+function fmtIN(n){return `₹${Number(n||0).toLocaleString("en-IN")}`;}
+
 function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks, setTasks, history, goals, setGoals, habits, setHabits, trackedSeconds, setTrackedSeconds, focusSeconds, setFocusSeconds, focusRunning, setFocusRunning, focusPreset, setFocusPreset, formatTime, formatFocus, timeRunning, setTimeRunning, toggleTask, deleteTask, onBack }) {
   const [tab, setTab] = useState(initialTab);
-  const [money, setMoney] = useSyncedUserState(session.user.id, "money", []);
-  const [investments, setInvestments] = useSyncedUserState(session.user.id, "investments", []);
-  const [assets, setAssets] = useSyncedUserState(session.user.id, "assets", []);
-  const [liabilities, setLiabilities] = useSyncedUserState(session.user.id, "liabilities", []);
+  const [moneyRaw, setMoney] = useSyncedUserState(session.user.id, "money", []);
+  const money = Array.isArray(moneyRaw) ? moneyRaw : [];
+  const [investmentsRaw, setInvestments] = useSyncedUserState(session.user.id, "investments", []);
+  const investments = Array.isArray(investmentsRaw) ? investmentsRaw : [];
+  const [assetsRaw, setAssets] = useSyncedUserState(session.user.id, "assets", []);
+  const assets = Array.isArray(assetsRaw) ? assetsRaw : [];
+  const [liabilitiesRaw, setLiabilities] = useSyncedUserState(session.user.id, "liabilities", []);
+  const liabilities = Array.isArray(liabilitiesRaw) ? liabilitiesRaw : [];
   const [networthHydrated, setNetworthHydrated] = useState(false);
   const [budget, setBudget] = useSyncedUserState(session.user.id, "monthly_budget", 0);
-  const [entry, setEntry] = useState({ type:"expense", title:"", amount:"", category:"General" });
+  const [budgetOverride, setBudgetOverride] = useSyncedUserState(session.user.id, "monthly_budget_override", false);
+  const [budgetCategoriesRaw, setBudgetCategories] = useSyncedUserState(session.user.id, "budget_categories", {});
+  const budgetCategories = budgetCategoriesRaw && typeof budgetCategoriesRaw === "object" && !Array.isArray(budgetCategoriesRaw) ? budgetCategoriesRaw : {};
+  const [financeGoalPlans, setFinanceGoalPlans] = useSyncedUserState(session.user.id, "finance_goal_plans", {});
+  const [financeGoalsRaw, setFinanceGoals] = useSyncedUserState(session.user.id, "finance_goals", []);
+  const financeGoals = Array.isArray(financeGoalsRaw) ? financeGoalsRaw : [];
+  const [cashflowAutomationRulesRaw, setCashflowAutomationRules] = useSyncedUserState(session.user.id, "cashflow_automation_rules", []);
+  const cashflowAutomationRules = Array.isArray(cashflowAutomationRulesRaw) ? cashflowAutomationRulesRaw : [];
   const [holding, setHolding] = useState({ name:"", invested:"", value:"" });
   const [habitText, setHabitText] = useState("");
-  const [habitForm, setHabitForm] = useState({ title:"", startDate:new Date().toISOString().slice(0,10), durationDays:30 });
+  const [habitForm, setHabitForm] = useState({ title:"", startDate:new Date().toISOString().slice(0,10), durationDays:30, scheduleType:"daily", scheduleDays:[1,2,3,4,5,6,0] });
   const [showHabitForm, setShowHabitForm] = useState(false);
   const [editingHabitId, setEditingHabitId] = useState(null);
   const [taskQuickTitle, setTaskQuickTitle] = useState("");
@@ -1205,10 +1281,12 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [taskEdit, setTaskEdit] = useState({ title:"", priority:"medium", task_date:"", goal_id:"" });
   const [showStudySummary, setShowStudySummary] = useState(false);
-  const [editingMoneyId, setEditingMoneyId] = useState(null);
   const [editingInvestmentId, setEditingInvestmentId] = useState(null);
-  const [moneyEdit, setMoneyEdit] = useState({type:"expense",title:"",amount:"",category:"General"});
   const [investmentEdit, setInvestmentEdit] = useState({name:"",invested:"",value:""});
+  const [editingAssetId, setEditingAssetId] = useState(null);
+  const [assetEdit, setAssetEdit] = useState({name:"",value:""});
+  const [editingLiabilityId, setEditingLiabilityId] = useState(null);
+  const [liabilityEdit, setLiabilityEdit] = useState({name:"",value:""});
   const [plannerDate, setPlannerDate] = useState(new Date().toISOString().slice(0,10));
   const [movingTaskId, setMovingTaskId] = useState(null);
   const [projects, setProjects] = useSyncedUserState(session.user.id, "projects", []);
@@ -1222,6 +1300,23 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
   const [engineTaskRecurrence, setEngineTaskRecurrence] = useState("none");
   const [engineTaskDependency, setEngineTaskDependency] = useState("");
   const [engineTaskGoal, setEngineTaskGoal] = useState("");
+  const [automationTitle, setAutomationTitle] = useState("");
+  const [automationFrequency, setAutomationFrequency] = useState("daily");
+  const [automationStartDate, setAutomationStartDate] = useState(new Date().toISOString().slice(0,10));
+  const [automationEndDate, setAutomationEndDate] = useState("");
+  const [automationPriority, setAutomationPriority] = useState("medium");
+  const [automationDuration, setAutomationDuration] = useState(30);
+  const [automationProject, setAutomationProject] = useState("");
+  const [automationGoal, setAutomationGoal] = useState("");
+  const [automationSaving, setAutomationSaving] = useState(false);
+  const [cashflowAutomationTitle, setCashflowAutomationTitle] = useState("");
+  const [cashflowAutomationType, setCashflowAutomationType] = useState("expense");
+  const [cashflowAutomationAmount, setCashflowAutomationAmount] = useState("");
+  const [cashflowAutomationCategory, setCashflowAutomationCategory] = useState("General");
+  const [cashflowAutomationFrequency, setCashflowAutomationFrequency] = useState("monthly");
+  const [cashflowAutomationStartDate, setCashflowAutomationStartDate] = useState(new Date().toISOString().slice(0,10));
+  const [cashflowAutomationEndDate, setCashflowAutomationEndDate] = useState("");
+  const [cashflowAutomationSaving, setCashflowAutomationSaving] = useState(false);
   const [capacityHours, setCapacityHours] = useSyncedUserState(session.user.id, "daily_capacity", 6);
   const [runwayDate, setRunwayDate] = useState(new Date().toISOString().slice(0,10));
   const [runwayStartHour, setRunwayStartHour] = useSyncedUserState(session.user.id, "runway_start", 9);
@@ -1242,7 +1337,7 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
   useEffect(()=>{
     if(!networthHydrated) return;
     const investmentValue=investments.reduce((sum,item)=>sum+Number(item.value||0),0);
-    const cashBalance=money.filter(item=>item.type==="income").reduce((sum,item)=>sum+Number(item.amount||0),0)-money.filter(item=>item.type==="expense").reduce((sum,item)=>sum+Number(item.amount||0),0);
+    const cashBalance=money.filter(item=>item.type==="income").reduce((sum,item)=>sum+Number(item.amount||0),0)-money.filter(item=>item.type==="expense"||item.type==="saving").reduce((sum,item)=>sum+Number(item.amount||0),0);
     const otherAssets=assets.reduce((sum,item)=>sum+Number(item.value||0),0);
     const liabilitiesValue=liabilities.reduce((sum,item)=>sum+Number(item.value||0),0);
     const snapshot={assets,liabilities,investments_value:investmentValue,cash_balance:cashBalance,networth_total:investmentValue+cashBalance+otherAssets-liabilitiesValue,updated_at:new Date().toISOString()};
@@ -1258,7 +1353,8 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
   const totalExpense=money.filter(x=>x.type==="expense").reduce((a,x)=>a+Number(x.amount),0);
   const portfolio=investments.reduce((a,x)=>a+Number(x.value||0),0);
   const invested=investments.reduce((a,x)=>a+Number(x.invested||0),0);
-  const moneyBalance=totalIncome-totalExpense;
+  const totalSavings=money.filter(x=>x.type==="saving").reduce((a,x)=>a+Number(x.amount||0),0);
+  const moneyBalance=totalIncome-totalExpense-totalSavings;
   const plannerTasks = tasks.filter(t => t.task_date === plannerDate);
   const plannerDone = plannerTasks.filter(t => t.status === "completed").length;
   const nextSevenDays = Array.from({length:7}, (_, i) => { const d = new Date(); d.setDate(d.getDate()+i); return d.toISOString().slice(0,10); });
@@ -1266,6 +1362,51 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
   const priorityOpen = plannerTasks.filter(t => t.status !== "completed" && ["high","urgent"].includes(String(t.priority || "").toLowerCase())).length;
   const planningScore = plannerTasks.length ? Math.round((plannerDone / plannerTasks.length) * 70 + (priorityOpen === 0 ? 30 : Math.max(0, 30 - priorityOpen * 10))) : 70;
   const getMeta = (id) => taskMeta[id] || { duration: 30, projectId: "", recurrence: "none", dependencyId: "" };
+  const recurringRules = Array.isArray(taskMeta.__recurring_rules) ? taskMeta.__recurring_rules : [];
+  const goalAutomationRules = Array.isArray(taskMeta.__goal_automations) ? taskMeta.__goal_automations : [];
+  const tasksRef = useRef(tasks);
+  const taskMetaRef = useRef(taskMeta);
+  const goalsRef = useRef(goals);
+  tasksRef.current = tasks;
+  taskMetaRef.current = taskMeta;
+  goalsRef.current = goals;
+  const cashflowRulesRef = useRef(cashflowAutomationRules);
+  const moneyRef = useRef(money);
+  cashflowRulesRef.current = cashflowAutomationRules;
+  moneyRef.current = money;
+  const recurrenceLabel = (frequency) => ({ daily:"Every day", weekdays:"Every weekday", weekly:"Every week", monthly:"Every month" }[frequency] || "One-time");
+  const nextRecurringDate = (dateKey, frequency) => {
+    const d = new Date(`${dateKey}T12:00:00`);
+    if (frequency === "daily") d.setDate(d.getDate()+1);
+    else if (frequency === "weekdays") { do { d.setDate(d.getDate()+1); } while (d.getDay()===0 || d.getDay()===6); }
+    else if (frequency === "weekly") d.setDate(d.getDate()+7);
+    else if (frequency === "monthly") {
+      // Clamp the day when moving from a long month (e.g. Jan 31 → Feb 28)
+      // instead of allowing JavaScript Date to overflow into the next month.
+      const originalDay=d.getDate();
+      d.setDate(1);
+      d.setMonth(d.getMonth()+1);
+      const lastDay=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+      d.setDate(Math.min(originalDay,lastDay));
+    }
+    return d.toISOString().slice(0,10);
+  };
+  const recurringRuleKey = (ruleId, dateKey) => `__recurring_run__${ruleId}__${dateKey}`;
+  const goalAutomationKey = (ruleId, dateKey) => `__goal_automation_run__${ruleId}__${dateKey}`;
+  const cashflowAutomationKey = (ruleId, dateKey) => `__cashflow_automation_run__${ruleId}__${dateKey}`;
+  const nextCashflowDate = (dateKey, frequency) => {
+    const d = new Date(`${dateKey}T12:00:00`);
+    if (frequency === "daily") d.setDate(d.getDate()+1);
+    else if (frequency === "weekdays") { do { d.setDate(d.getDate()+1); } while (d.getDay()===0 || d.getDay()===6); }
+    else if (frequency === "weekly") d.setDate(d.getDate()+7);
+    else if (frequency === "monthly") {
+      const originalDay=d.getDate(); d.setDate(1); d.setMonth(d.getMonth()+1);
+      const lastDay=new Date(d.getFullYear(),d.getMonth()+1,0).getDate(); d.setDate(Math.min(originalDay,lastDay));
+    }
+    return d.toISOString().slice(0,10);
+  };
+  const cashflowFrequencyLabel = (frequency) => ({daily:"Every day",weekdays:"Every weekday",weekly:"Every week",monthly:"Every month"}[frequency] || "Every month");
+
   const isBlocked = (task) => { const dep = getMeta(task.id).dependencyId; return Boolean(dep && tasks.some(x => x.id === dep && x.status !== "completed")); };
   const durationFor = (task) => Math.max(5, Number(getMeta(task.id).duration || 30));
   const engineTasks = tasks.slice().sort((a,b) => {
@@ -1324,19 +1465,171 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
   };
   const addProject = () => { const title=projectName.trim(); if(!title)return; setProjects(c=>[{id:crypto.randomUUID(),name:title,createdAt:new Date().toISOString()},...c]); setProjectName(""); };
   const updateTaskMeta = (task, patch) => setTaskMeta(c=>({...c,[task.id]:{duration:30,projectId:"",recurrence:"none",dependencyId:"",...(c[task.id]||{}),...patch}}));
-  const generateRecurring = async (task) => { const rec=getMeta(task.id).recurrence; if(rec==="none") return; const base=new Date(`${task.task_date}T12:00:00`); const days=rec==="daily"?1:rec==="weekly"?7:30; base.setDate(base.getDate()+days); const nextDate=base.toISOString().slice(0,10); const {data,error:e}=await supabase.from("tasks").insert({user_id:session.user.id,title:task.title,task_date:nextDate,status:"todo",priority:task.priority||"medium",goal_id:task.goal_id||null}).select().single(); if(!e&&data){setTasks(c=>[...c,data]);setTaskMeta(c=>({...c,[data.id]:{...getMeta(task.id)}}));} };
+  const generateRecurring = async (task) => {
+    const meta=getMeta(task.id); const rec=meta.recurrence; if(rec==="none") return;
+    const nextDate=nextRecurringDate(task.task_date,rec);
+    const rule=meta.automationId ? recurringRules.find(r=>r.id===meta.automationId) : null;
+    if(rule?.endDate && nextDate>rule.endDate) return;
+    const key=meta.automationId ? recurringRuleKey(meta.automationId,nextDate) : null;
+    if(key && tasks.some(t=>getMeta(t.id).recurringRunKey===key)) return;
+    const tempId=crypto.randomUUID();
+    const payload={user_id:session.user.id,title:task.title,task_date:nextDate,status:"todo",priority:task.priority||"medium",goal_id:task.goal_id||null};
+    setTasks(c=>[...c,{id:tempId,...payload,created_at:new Date().toISOString()}]);
+    setTaskMeta(c=>({...c,[tempId]:{...meta,recurringRunKey:key||undefined}}));
+    const {data,error:e}=await supabase.from("tasks").insert(payload).select().single();
+    if(e){setTasks(c=>c.filter(x=>x.id!==tempId));setTaskMeta(c=>{const n={...c};delete n[tempId];return n;});}
+    else if(data){setTasks(c=>c.map(x=>x.id===tempId?data:x));setTaskMeta(c=>{const n={...c};n[data.id]=n[tempId];delete n[tempId];return n;});}
+  };
   const moveTask = async (task, date) => { if (!date || date === task.task_date || movingTaskId === task.id) return; setMovingTaskId(task.id); const {data,error:e}=await supabase.from("tasks").update({task_date:date}).eq("id",task.id).select().single(); if (!e && data) setTasks(c=>c.map(x=>x.id===task.id?data:x)); setMovingTaskId(null); };
+  const createRecurringAutomation = () => {
+    const title = automationTitle.trim();
+    if (!title || automationSaving) return;
+    if (automationEndDate && automationEndDate < automationStartDate) { window.alert("End date must be on or after the start date."); return; }
+    const rule = { id: crypto.randomUUID(), title, frequency: automationFrequency, startDate: automationStartDate, endDate: automationEndDate || null, priority: automationPriority, duration: Number(automationDuration)||30, projectId: automationProject, goalId: automationGoal || null, enabled: true, createdAt: new Date().toISOString() };
+    setTaskMeta(current => ({ ...current, __recurring_rules: [rule, ...(Array.isArray(current.__recurring_rules)?current.__recurring_rules:[])] }));
+    setAutomationTitle("");
+    setAutomationEndDate("");
+  };
+  const toggleRecurringAutomation = (ruleId) => setTaskMeta(current => ({ ...current, __recurring_rules: (current.__recurring_rules||[]).map(r => r.id===ruleId ? {...r,enabled:!r.enabled} : r) }));
+  const deleteRecurringAutomation = (ruleId) => {
+    if (!window.confirm("Delete this automation? Existing tasks it already created will stay.")) return;
+    setTaskMeta(current => ({ ...current, __recurring_rules: (current.__recurring_rules||[]).filter(r=>r.id!==ruleId) }));
+  };
+  const createCashflowAutomation = () => {
+    const title = cashflowAutomationTitle.trim();
+    const amount = Number(cashflowAutomationAmount);
+    if (!title || !amount || amount <= 0 || cashflowAutomationSaving) return;
+    if (cashflowAutomationEndDate && cashflowAutomationEndDate < cashflowAutomationStartDate) { window.alert("End date must be on or after the start date."); return; }
+    const rule = { id: crypto.randomUUID(), title, type: cashflowAutomationType, amount, category: cashflowAutomationCategory.trim() || "General", frequency: cashflowAutomationFrequency, startDate: cashflowAutomationStartDate, endDate: cashflowAutomationEndDate || null, enabled: true, createdAt: new Date().toISOString() };
+    setCashflowAutomationRules(current => [rule, ...(Array.isArray(current)?current:[])]);
+    setCashflowAutomationTitle(""); setCashflowAutomationAmount(""); setCashflowAutomationEndDate("");
+  };
+  const toggleCashflowAutomation = (ruleId) => setCashflowAutomationRules(current => (current||[]).map(r=>r.id===ruleId?{...r,enabled:!r.enabled}:r));
+  const deleteCashflowAutomation = (ruleId) => {
+    if (!window.confirm("Delete this cashflow automation? Existing entries it already created will stay.")) return;
+    setCashflowAutomationRules(current => (current||[]).filter(r=>r.id!==ruleId));
+  };
+  const addFinanceGoalContribution = async (goalId, amount, note) => {
+    const value=Number(amount); const goal=(financeGoals||[]).find(g=>String(g.id)===String(goalId));
+    if(!goal||!Number.isFinite(value)||value<=0)return {ok:false,message:"Choose a finance goal and enter a valid contribution."};
+    const remaining=Math.max(0,Number(goal.target||0)-Number(goal.saved||0));
+    if(value>remaining)return {ok:false,message:`Contribution is higher than the remaining goal amount (₹${remaining.toLocaleString("en-IN")}).`};
+    const next={...goal,saved:Number(goal.saved||0)+value,updatedAt:new Date().toISOString()};
+    const tx={id:crypto.randomUUID(),user_id:session.user.id,type:"saving",title:note?.trim()||`Goal contribution · ${goal.title}`,amount:value,category:"Goal Funding",date:new Date().toISOString(),financeGoalId:goal.id,created_at:new Date().toISOString()};
+    setMoney(v=>[tx,...v]); setFinanceGoals(v=>v.map(g=>String(g.id)===String(goal.id)?next:g));
+    return {ok:true};
+  };
+  const createFinanceGoal = (form, editingId) => {
+    const title=form.title.trim(), target=Number(form.target), saved=Number(form.saved||0), monthly=Number(form.monthly||0);
+    if(!title||target<=0||saved<0||saved>target||monthly<0){window.alert("Enter a goal name, a valid target, and a saved amount that does not exceed the target.");return false;}
+    if(editingId){setFinanceGoals(v=>v.map(g=>g.id===editingId?{...g,title,target,saved,monthly,deadline:form.deadline||null,status:"active",updatedAt:new Date().toISOString()}:g));}
+    else setFinanceGoals(v=>[{id:crypto.randomUUID(),title,target,saved,monthly,deadline:form.deadline||null,status:"active",createdAt:new Date().toISOString()},...(v||[])]);
+    return true;
+  };
+  const materializeRecurringCashflow = async () => {
+    const rules = Array.isArray(cashflowRulesRef.current) ? cashflowRulesRef.current : [];
+    if (!rules.length) return;
+    const today = new Date().toISOString().slice(0,10);
+    const existingKeys = new Set((moneyRef.current||[]).map(x=>x.recurringRunKey).filter(Boolean));
+    const additions=[];
+    const addEntry=(rule,date,key)=>{
+      if(existingKeys.has(key)) return;
+      const tempId=crypto.randomUUID();
+      additions.push({id:tempId,user_id:session.user.id,type:rule.type,title:rule.title,amount:Number(rule.amount),category:rule.category||"General",date:`${date}T09:00:00.000Z`,recurringRunKey:key,automationId:rule.id,created_at:new Date().toISOString()});
+      existingKeys.add(key);
+    };
+    for(const rule of rules){
+      if(!rule.enabled || !rule.startDate) continue;
+      let date=rule.startDate, guard=0;
+      while(date<=today && guard++<400){
+        if(!rule.endDate || date<=rule.endDate) addEntry(rule,date,cashflowAutomationKey(rule.id,date));
+        const next=nextCashflowDate(date,rule.frequency);
+        if(next===date || (rule.endDate && next>rule.endDate && date<today)) break;
+        date=next;
+      }
+    }
+    if(!additions.length) return;
+    setMoney(current=>[...additions,...current]);
+    for(const temp of additions){
+      // Cashflow is stored in the user's synced app state, so there is no separate DB table to insert into.
+      // setMoney above persists the complete updated list through the existing sync hook.
+    }
+  };
+
+  const materializeRecurringTasks = async () => {
+    const metaNow = taskMetaRef.current || {};
+    const rules = Array.isArray(metaNow.__recurring_rules) ? metaNow.__recurring_rules : [];
+    const goalRules = Array.isArray(metaNow.__goal_automations) ? metaNow.__goal_automations : [];
+    const currentTasks = tasksRef.current;
+    if (!rules.length && !goalRules.length) return;
+    const today = new Date().toISOString().slice(0,10);
+    const existingKeys = new Set();
+    currentTasks.forEach(t => {
+      const m = taskMetaRef.current[t.id] || {};
+      if (m.recurringRunKey) existingKeys.add(m.recurringRunKey);
+      if (m.goalAutomationRunKey) existingKeys.add(m.goalAutomationRunKey);
+    });
+    const additions=[]; const metaAdds={};
+    const addDueTask = (rule, date, key, extraMeta={}) => {
+      if (existingKeys.has(key)) return;
+      const tempId=crypto.randomUUID();
+      additions.push({id:tempId,user_id:session.user.id,title:rule.title,task_date:date,status:"todo",priority:rule.priority||"medium",goal_id:rule.goalId||null,created_at:new Date().toISOString()});
+      metaAdds[tempId]={duration:rule.duration||30,projectId:rule.projectId||"",recurrence:rule.frequency,dependencyId:"",...extraMeta};
+      existingKeys.add(key);
+    };
+    for (const rule of rules) {
+      if (!rule.enabled || !rule.startDate) continue;
+      let date = rule.startDate;
+      let guard=0;
+      while (date <= today && guard++ < 400) {
+        if (!rule.endDate || date <= rule.endDate) addDueTask(rule,date,recurringRuleKey(rule.id,date),{recurringRunKey:recurringRuleKey(rule.id,date),automationId:rule.id});
+        const next=nextRecurringDate(date,rule.frequency);
+        if(next===date || (rule.endDate && next>rule.endDate && date<today)) break;
+        date=next;
+      }
+    }
+    const liveGoals = goalsRef.current || [];
+    for (const rule of goalRules) {
+      if (!rule.enabled || !rule.startDate || !rule.goalId) continue;
+      const goal = liveGoals.find(g=>String(g.id)===String(rule.goalId));
+      if (!goal || goal.status === "completed") continue;
+      const effectiveEnd = rule.endDate || goal.target_date || null;
+      let date = rule.startDate;
+      let guard=0;
+      while (date <= today && guard++ < 400) {
+        if ((!effectiveEnd || date <= effectiveEnd) && (!goal.target_date || date <= goal.target_date)) {
+          const key=goalAutomationKey(rule.id,date);
+          addDueTask(rule,date,key,{goalAutomationRunKey:key,goalAutomationId:rule.id});
+        }
+        const next=nextRecurringDate(date,rule.frequency);
+        if(next===date || (effectiveEnd && next>effectiveEnd && date<today)) break;
+        date=next;
+      }
+    }
+    if (!additions.length) return;
+    setTasks(current => [...current, ...additions]);
+    setTaskMeta(current => ({...current,...metaAdds}));
+    for (const temp of additions) {
+      const {data,error:e}=await supabase.from("tasks").insert({user_id:session.user.id,title:temp.title,task_date:temp.task_date,status:temp.status,priority:temp.priority,goal_id:temp.goal_id}).select().single();
+      if(e){ setTasks(c=>c.filter(x=>x.id!==temp.id)); setTaskMeta(c=>{const n={...c}; delete n[temp.id]; return n;}); }
+      else if(data){ setTasks(c=>c.map(x=>x.id===temp.id?data:x)); setTaskMeta(c=>{const n={...c}; n[data.id]=n[temp.id]; delete n[temp.id]; return n;}); }
+    }
+  };
+  useEffect(()=>{ materializeRecurringTasks(); materializeRecurringCashflow(); const id=setInterval(()=>{materializeRecurringTasks(); materializeRecurringCashflow();},60000); return()=>clearInterval(id); },[recurringRules.length, goalAutomationRules.length, cashflowAutomationRules.length, session.user.id]);
+
   const tabs=[
     ["runway",Clock3,"Today"],["productivity",BriefcaseBusiness,"Productivity Engine"],["tasks",ListChecks,"Tasks"],["goals",Target,"Goals"],["habits",Flame,"Habits"],["focus",Timer,"Focus"],
-    ["money",WalletCards,"Cashflow"],["investments",BriefcaseBusiness,"Investments"],["networth",CircleDollarSign,"Net Worth"]
+    ["money",WalletCards,"Cashflow"],["budget",PieChart,"Budget"],["investments",BriefcaseBusiness,"Investments"],["networth",CircleDollarSign,"Net Worth"]
   ];
   const visibleTabs = tabs.filter(([id]) => id !== "streak");
-  const addMoney=()=>{ if(!entry.title.trim()||Number(entry.amount)<=0)return; setMoney(m=>[{...entry,id:crypto.randomUUID(),amount:Number(entry.amount),date:new Date().toISOString()},...m]); setEntry(e=>({...e,title:"",amount:""})); };
-  const startEditMoney=(x)=>{setEditingMoneyId(x.id);setMoneyEdit({type:x.type,title:x.title||"",amount:String(x.amount||""),category:x.category||"General"});};
-  const saveMoneyEdit=()=>{if(!editingMoneyId||!moneyEdit.title.trim()||Number(moneyEdit.amount)<=0)return;setMoney(m=>m.map(x=>x.id===editingMoneyId?{...x,...moneyEdit,amount:Number(moneyEdit.amount)}:x));setEditingMoneyId(null);};
-  const deleteMoney=(id)=>{if(window.confirm("Delete this cashflow entry? This cannot be undone."))setMoney(m=>m.filter(x=>x.id!==id));};
   const addAsset=()=>{ const name=prompt("Asset name"); const value=Number(prompt("Current value")); if(name&&value>0)setAssets(v=>[{id:crypto.randomUUID(),name,value},...v]); };
+  const startEditAsset=(x)=>{setEditingAssetId(x.id);setAssetEdit({name:x.name||"",value:String(x.value||"")});};
+  const saveAssetEdit=()=>{if(!editingAssetId||!assetEdit.name.trim()||Number(assetEdit.value)<=0)return;setAssets(v=>v.map(x=>x.id===editingAssetId?{...x,name:assetEdit.name.trim(),value:Number(assetEdit.value)}:x));setEditingAssetId(null);};
+  const deleteAsset=(id)=>{if(window.confirm("Delete this asset? This cannot be undone."))setAssets(v=>v.filter(x=>x.id!==id));};
   const addLiability=()=>{ const name=prompt("Liability name"); const value=Number(prompt("Outstanding amount")); if(name&&value>0)setLiabilities(v=>[{id:crypto.randomUUID(),name,value},...v]); };
+  const startEditLiability=(x)=>{setEditingLiabilityId(x.id);setLiabilityEdit({name:x.name||"",value:String(x.value||"")});};
+  const saveLiabilityEdit=()=>{if(!editingLiabilityId||!liabilityEdit.name.trim()||Number(liabilityEdit.value)<=0)return;setLiabilities(v=>v.map(x=>x.id===editingLiabilityId?{...x,name:liabilityEdit.name.trim(),value:Number(liabilityEdit.value)}:x));setEditingLiabilityId(null);};
+  const deleteLiability=(id)=>{if(window.confirm("Delete this liability? This cannot be undone."))setLiabilities(v=>v.filter(x=>x.id!==id));};
   const addInvestment=()=>{ if(!holding.name.trim()||Number(holding.value)<=0)return; setInvestments(v=>[{...holding,id:crypto.randomUUID(),invested:Number(holding.invested||0),value:Number(holding.value)},...v]); setHolding({name:"",invested:"",value:""}); };
   const startEditInvestment=(x)=>{setEditingInvestmentId(x.id);setInvestmentEdit({name:x.name||"",invested:String(x.invested||""),value:String(x.value||"")});};
   const saveInvestmentEdit=()=>{if(!editingInvestmentId||!investmentEdit.name.trim()||Number(investmentEdit.value)<=0)return;setInvestments(v=>v.map(x=>x.id===editingInvestmentId?{...x,...investmentEdit,invested:Number(investmentEdit.invested||0),value:Number(investmentEdit.value)}:x));setEditingInvestmentId(null);};
@@ -1368,14 +1661,47 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
     });
   };
   const habitDayKey = (date) => { const d = typeof date === "string" ? new Date(`${date}T12:00:00`) : date; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
-  const normalizedHabit = (h) => ({ ...h, startDate: h.startDate || habitDayKey(new Date()), durationDays: Math.max(1, Number(h.durationDays) || 30), completedDates: Array.isArray(h.completedDates) ? h.completedDates : (h.done ? [habitDayKey(new Date())] : []) });
+  const normalizedHabit = (h) => ({
+    ...h,
+    startDate: h.startDate || habitDayKey(new Date()),
+    durationDays: Math.max(1, Number(h.durationDays) || 30),
+    scheduleType: ["daily","weekdays","custom"].includes(h.scheduleType) ? h.scheduleType : "daily",
+    scheduleDays: Array.isArray(h.scheduleDays) && h.scheduleDays.length ? [...new Set(h.scheduleDays.map(Number).filter(d=>d>=0&&d<=6))] : [1,2,3,4,5,6,0],
+    completedDates: Array.isArray(h.completedDates) ? h.completedDates : (h.done ? [habitDayKey(new Date())] : [])
+  });
+  const habitScheduledOn = (h, dateKey) => {
+    const n = normalizedHabit(h);
+    const day = new Date(`${dateKey}T12:00:00`).getDay();
+    if (n.scheduleType === "weekdays") return day >= 1 && day <= 5;
+    if (n.scheduleType === "custom") return n.scheduleDays.includes(day);
+    return true;
+  };
+  const habitScheduleLabel = (h) => {
+    const n = normalizedHabit(h);
+    if (n.scheduleType === "weekdays") return "Weekdays";
+    if (n.scheduleType === "custom") {
+      const names = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+      return n.scheduleDays.sort((a,b)=>a-b).map(d=>names[d]).join(" · ") || "Custom schedule";
+    }
+    return "Every day";
+  };
   const isHabitActiveOn = (h, dateKey) => { const n = normalizedHabit(h); const start = new Date(`${n.startDate}T12:00:00`); const day = new Date(`${dateKey}T12:00:00`); const end = new Date(start); end.setDate(end.getDate() + n.durationDays - 1); return day >= start && day <= end; };
   const isHabitDoneOn = (h, dateKey) => normalizedHabit(h).completedDates.includes(dateKey);
   const habitDays = (h) => { const n=normalizedHabit(h); const start=new Date(`${n.startDate}T12:00:00`); return Array.from({length:n.durationDays},(_,i)=>{const d=new Date(start);d.setDate(start.getDate()+i);return {key:habitDayKey(d),label:d.toLocaleDateString("en-US",{weekday:"short"}).slice(0,2),day:d.getDate()};}); };
-  const toggleHabitDay = (habit, dateKey) => setHabits(current => current.map(h => { if(h.id!==habit.id || !isHabitActiveOn(h,dateKey)) return h; const n=normalizedHabit(h); const has=n.completedDates.includes(dateKey); const completedDates=has?n.completedDates.filter(d=>d!==dateKey):[...new Set([...n.completedDates,dateKey])]; return {...n,completedDates,done:completedDates.includes(habitDayKey(new Date()))}; }));
-  const openNewHabit = () => { setEditingHabitId(null); setHabitForm({title:"",startDate:habitDayKey(new Date()),durationDays:30}); setShowHabitForm(true); };
-  const openEditHabit = (habit) => { const n=normalizedHabit(habit); setEditingHabitId(habit.id); setHabitForm({title:n.title,startDate:n.startDate,durationDays:n.durationDays}); setShowHabitForm(true); };
-  const saveHabit = () => { const title=habitForm.title.trim(); const duration=Math.max(1,Math.min(365,Number(habitForm.durationDays)||0)); if(!title || !habitForm.startDate || !duration) return; setHabits(current => editingHabitId ? current.map(h => h.id===editingHabitId ? {...normalizedHabit(h),title,startDate:habitForm.startDate,durationDays:duration} : h) : [{id:crypto.randomUUID(),title,startDate:habitForm.startDate,durationDays:duration,completedDates:[]},...current]); setShowHabitForm(false); };
+  const toggleHabitDay = (habit, dateKey) => setHabits(current => current.map(h => { if(h.id!==habit.id || !isHabitActiveOn(h,dateKey) || !habitScheduledOn(h,dateKey)) return h; const n=normalizedHabit(h); const has=n.completedDates.includes(dateKey); const completedDates=has?n.completedDates.filter(d=>d!==dateKey):[...new Set([...n.completedDates,dateKey])]; return {...n,completedDates,done:completedDates.includes(habitDayKey(new Date()))}; }));
+  const openNewHabit = () => { setEditingHabitId(null); setHabitForm({title:"",startDate:habitDayKey(new Date()),durationDays:30,scheduleType:"daily",scheduleDays:[1,2,3,4,5,6,0]}); setShowHabitForm(true); };
+  const openEditHabit = (habit) => { const n=normalizedHabit(habit); setEditingHabitId(habit.id); setHabitForm({title:n.title,startDate:n.startDate,durationDays:n.durationDays,scheduleType:n.scheduleType,scheduleDays:n.scheduleDays}); setShowHabitForm(true); };
+  const saveHabit = () => {
+    const title=habitForm.title.trim();
+    const duration=Math.max(1,Math.min(365,Number(habitForm.durationDays)||0));
+    const scheduleType=["daily","weekdays","custom"].includes(habitForm.scheduleType) ? habitForm.scheduleType : "daily";
+    const scheduleDays=scheduleType === "custom" ? [...new Set((habitForm.scheduleDays||[]).map(Number).filter(d=>d>=0&&d<=6))] : scheduleType === "weekdays" ? [1,2,3,4,5] : [0,1,2,3,4,5,6];
+    if(!title || !habitForm.startDate || !duration || (scheduleType === "custom" && !scheduleDays.length)) return;
+    setHabits(current => editingHabitId
+      ? current.map(h => h.id===editingHabitId ? {...normalizedHabit(h),title,startDate:habitForm.startDate,durationDays:duration,scheduleType,scheduleDays} : h)
+      : [{id:crypto.randomUUID(),title,startDate:habitForm.startDate,durationDays:duration,scheduleType,scheduleDays,completedDates:[]},...current]);
+    setShowHabitForm(false);
+  };
   const deleteHabit = (habit) => { if(window.confirm(`Delete “${habit.title}”? Its habit history will also be removed.`)) setHabits(current=>current.filter(h=>h.id!==habit.id)); };
   const title={runway:"Today’s Runway",productivity:"Productivity Engine",tasks:"Tasks",streak:"Streak",goals:"Goals that move you.",habits:"Habit System",focus:"Focus Mode",money:"Cashflow",budget:"Budget",investments:"Investments",networth:"Net Worth"}[tab];
   const renderHabitCard = (raw) => {
@@ -1383,17 +1709,20 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
     const days = habitDays(h);
     const today = habitDayKey(new Date());
     const activeToday = isHabitActiveOn(h, today);
-    const completedCount = h.completedDates.filter(d => isHabitActiveOn(h, d)).length;
+    const scheduledToday = activeToday && habitScheduledOn(h, today);
+    const scheduledCount = days.filter(d => habitScheduledOn(h,d.key)).length;
+    const completedCount = h.completedDates.filter(d => isHabitActiveOn(h, d) && habitScheduledOn(h,d)).length;
+    const nextScheduled = days.find(d => d.key >= today && isHabitActiveOn(h,d.key) && habitScheduledOn(h,d.key));
     return (
       <article className="habit-system-card" key={h.id}>
         <div className="habit-system-card-head">
-          <div><span className="card-kicker">{activeToday ? "ACTIVE NOW" : "DURATION COMPLETE"}</span><h3>{h.title}</h3><p>{new Date(`${h.startDate}T12:00:00`).toLocaleDateString("en-US", {month:"short",day:"numeric",year:"numeric"})} · {h.durationDays} days · {completedCount}/{h.durationDays} completed</p></div>
+          <div><span className="card-kicker">{!activeToday ? "DURATION COMPLETE" : scheduledToday ? "SCHEDULED TODAY" : "REST DAY"}</span><h3>{h.title}</h3><p>{new Date(`${h.startDate}T12:00:00`).toLocaleDateString("en-US", {month:"short",day:"numeric",year:"numeric"})} · {h.durationDays} days · {completedCount}/{scheduledCount} scheduled days · {habitScheduleLabel(h)}{nextScheduled && !scheduledToday ? ` · Next ${nextScheduled.key}` : ""}</p></div>
           <div className="habit-row-actions"><button className="ghost-small" onClick={() => openEditHabit(h)}><PenLine size={14}/> Edit</button><button className="ghost-small danger-text" onClick={() => deleteHabit(h)}><Trash2 size={14}/> Delete</button></div>
         </div>
         <div className="habit-day-strip">
           {days.map(day => {
             const done = isHabitDoneOn(h, day.key);
-            return <button key={day.key} className={`${done ? "completed " : ""}${day.key === today ? "today" : ""}`} onClick={() => toggleHabitDay(h, day.key)} disabled={!isHabitActiveOn(h, day.key)} title={`${day.key} · ${done ? "Completed" : "Not completed"}`}><span>{done ? <Check size={13}/> : day.day}</span><small>{day.label}</small></button>;
+            return <button key={day.key} className={`${done ? "completed " : ""}${day.key === today ? "today " : ""}${habitScheduledOn(h,day.key) ? "scheduled" : "rest-day"}`} onClick={() => toggleHabitDay(h, day.key)} disabled={!isHabitActiveOn(h, day.key) || !habitScheduledOn(h,day.key)} title={`${day.key} · ${habitScheduledOn(h,day.key) ? (done ? "Completed" : "Scheduled") : "Rest day"}`}><span>{done ? <Check size={13}/> : day.day}</span><small>{habitScheduledOn(h,day.key) ? day.label : "REST"}</small></button>;
           })}
         </div>
       </article>
@@ -1402,11 +1731,11 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
   return <div className="tracker-page-shell">
     <header className="tracker-page-topbar"><div className="tracker-page-brand"><button className="back-button" onClick={onBack}><ArrowLeft size={17}/></button><div><span>TRACKEN</span><small>PERSONAL PROGRESS OS</small></div></div><div className="tracker-page-actions"><button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode">{theme==="light"?<Moon size={18}/>:<Sun size={18}/>}<span>{theme==="light"?"Dark mode":"Light mode"}</span></button></div></header>
     <div className="tracker-page-body"><aside className="tracker-subnav"><div className="tracker-subnav-kicker">TRACK CENTER</div>{visibleTabs.map(([id,Icon,label])=><button key={id} className={tab===id?"active":""} onClick={()=>setTab(id)}><Icon size={17}/><span>{label}</span>{id==="tasks"&&<small>{todayTasks.filter(t=>t.status!=="completed").length}</small>}</button>)}<div className="tracker-subnav-footer"><span>TRACKEN SCORE</span><strong>{Math.min(100,Math.round((done/Math.max(todayTasks.length,1))*60+(Math.min(studyMinutes/900,1)*40)))}</strong><small>Activity-based</small></div></aside>
-      <main className="tracker-workspace">{tab!=="goals"&&<div className="tracker-heading"><div><span className="card-kicker">TRACK CENTER</span><h1>{title}</h1><p>{tab==="money"?"Know where your money goes.":tab==="investments"?"Keep your portfolio visible.":tab==="networth"?"See your financial position at a glance.":tab==="budget"?"Set a clear boundary for your monthly spending.":tab==="productivity"?"Turn goals, tasks and time into an execution system.":tab==="streak"?"Your study consistency, summarized in one clear view.":"One system for the work that moves you forward."}</p></div><span className="tracker-date">{new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</span></div>}
+      <main className="tracker-workspace">{tab!=="goals"&&tab!=="budget"&&<div className="tracker-heading"><div><span className="card-kicker">TRACK CENTER</span><h1>{title}</h1><p>{tab==="money"?"Know where your money goes.":tab==="investments"?"Keep your portfolio visible.":tab==="networth"?"See your financial position at a glance.":tab==="productivity"?"Turn goals, tasks and time into an execution system.":tab==="streak"?"Your study consistency, summarized in one clear view.":"One system for the work that moves you forward."}</p></div><span className="tracker-date">{new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}</span></div>}
       {tab==="runway"&&<section className="runway-engine">
         <div className="runway-hero">
           <div className="runway-hero-copy">
-            <span className="eyebrow"><span></span> DAILY OPERATING SYSTEM · 3.5.12</span>
+            <span className="eyebrow"><span></span> DAILY OPERATING SYSTEM · 4.1.3</span>
             <h2>Your day, turned into a <em>clear runway.</em></h2>
             <p>TRACKEN converts today's open work into a realistic sequence using priority, estimated duration and your available capacity. The goal is not to fill every minute — it is to finish the work that matters.</p>
             <div className="runway-date-controls">
@@ -1447,7 +1776,7 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
       </section>}
       {tab==="productivity"&&<section className="productivity-engine">
         <div className="productivity-hero">
-          <div><span className="eyebrow"><span></span> EXECUTION SYSTEM · 3.5.12</span><h2>Turn goals into <em>finished work.</em></h2><p>Projects, priorities, dependencies, recurring work and time capacity — one engine for deciding what deserves your attention.</p></div>
+          <div><span className="eyebrow"><span></span> EXECUTION SYSTEM · 4.1.3</span><h2>Turn goals into <em>finished work.</em></h2><p>Projects, priorities, dependencies, recurring work and time capacity — one engine for deciding what deserves your attention.</p></div>
           <div className="productivity-hero-score"><span>CAPACITY TODAY</span><strong>{Math.max(0,Math.round((engineCapacityMinutes-enginePlannedMinutes)/60*10)/10)}h</strong><small>{Math.round(enginePlannedMinutes/60*10)/10}h planned · {capacityHours}h capacity</small></div>
         </div>
         <article className="productivity-streak-card" onClick={()=>setShowStudySummary(true)} role="button" tabIndex="0" onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setShowStudySummary(true);}}>
@@ -1461,6 +1790,7 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
           <article className="tracker-large-card engine-capacity-card"><div className="panel-heading"><div><span className="card-kicker">TIME CAPACITY</span><h2>Don't overbook yourself.</h2></div><Clock3 size={20}/></div><label className="engine-capacity-input"><span>Daily capacity</span><div><input type="number" min="1" max="24" step="0.5" value={capacityHours} onChange={e=>setCapacityHours(Math.max(1,Number(e.target.value)||1))}/><b>hours</b></div></label><div className="capacity-meter"><i style={{width:`${Math.min(100,enginePlannedMinutes/engineCapacityMinutes*100)}%`}}/></div><div className="capacity-stats"><span><b>{Math.round(enginePlannedMinutes/60*10)/10}h</b> planned</span><span><b>{Math.max(0,Math.round((engineCapacityMinutes-enginePlannedMinutes)/60*10)/10)}h</b> available</span></div><div className="engine-alert">{enginePlannedMinutes>engineCapacityMinutes?<><Bell size={16}/><span>Your plan exceeds today's capacity. Move lower-value work.</span></>:<><Check size={16}/><span>Your planned workload fits inside your stated capacity.</span></>}</div></article>
         </div>
         <div className="productivity-grid lower">
+          <article className="tracker-large-card automation-center-card"><div className="panel-heading"><div><span className="card-kicker">AUTOMATION CENTER · 01</span><h2>Recurring tasks.</h2><p className="tracker-copy">Create a rule once. TRACKEN keeps the planned work appearing on schedule.</p></div><RotateCcw size={20}/></div><div className="automation-form-grid"><input value={automationTitle} onChange={e=>setAutomationTitle(e.target.value)} placeholder="What should repeat?"/><select value={automationFrequency} onChange={e=>setAutomationFrequency(e.target.value)}><option value="daily">Every day</option><option value="weekdays">Every weekday</option><option value="weekly">Every week</option><option value="monthly">Every month</option></select><input type="date" value={automationStartDate} onChange={e=>setAutomationStartDate(e.target.value)}/><input type="date" value={automationEndDate} onChange={e=>setAutomationEndDate(e.target.value)} title="Optional end date"/><select value={automationPriority} onChange={e=>setAutomationPriority(e.target.value)}><option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><select value={automationDuration} onChange={e=>setAutomationDuration(Number(e.target.value))}><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">1 hour</option><option value="90">90 min</option><option value="120">2 hours</option></select><select value={automationProject} onChange={e=>setAutomationProject(e.target.value)}><option value="">No project</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><select value={automationGoal} onChange={e=>setAutomationGoal(e.target.value)}><option value="">No goal (optional)</option>{goals.filter(g=>g.status==="active").map(g=><option key={g.id} value={g.id}>{g.title}</option>)}</select><button className="primary-small" onClick={createRecurringAutomation}><RotateCcw size={15}/> Create automation</button></div><div className="automation-list">{recurringRules.map(rule=><div className={`automation-rule ${rule.enabled?"active":"paused"}`} key={rule.id}><div className="automation-rule-icon"><RotateCcw size={16}/></div><div className="automation-rule-main"><b>{rule.title}</b><small>{recurrenceLabel(rule.frequency)} · starts {rule.startDate}{rule.endDate?` · ends ${rule.endDate}`:""}{rule.goalId?` · Goal · ${goals.find(g=>String(g.id)===String(rule.goalId))?.title||"Linked goal"}`:""}</small></div><span className="automation-status">{rule.enabled?"ACTIVE":"PAUSED"}</span><button className="ghost-small" onClick={()=>toggleRecurringAutomation(rule.id)}>{rule.enabled?"Pause":"Resume"}</button><button className="ghost-small danger-ghost" onClick={()=>deleteRecurringAutomation(rule.id)}><Trash2 size={14}/></button></div>)}{!recurringRules.length&&<div className="automation-empty"><RotateCcw size={22}/><div><b>No recurring task rules yet.</b><small>Create one above and TRACKEN will handle the repetition.</small></div></div>}</div></article>
           <article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">CREATE WORK</span><h2>Capture the whole task.</h2></div><Plus size={20}/></div><div className="engine-form-grid"><input value={engineTaskTitle} onChange={e=>setEngineTaskTitle(e.target.value)} placeholder="Task that needs to get done…"/><input type="date" value={engineTaskDate} onChange={e=>setEngineTaskDate(e.target.value)}/><select value={engineTaskPriority} onChange={e=>setEngineTaskPriority(e.target.value)}><option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><select value={engineTaskDuration} onChange={e=>setEngineTaskDuration(Number(e.target.value))}><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">1 hour</option><option value="90">90 min</option><option value="120">2 hours</option></select><select value={engineTaskProject} onChange={e=>setEngineTaskProject(e.target.value)}><option value="">No project</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><select value={engineTaskRecurrence} onChange={e=>setEngineTaskRecurrence(e.target.value)}><option value="none">One-time</option><option value="daily">Every day</option><option value="weekly">Every week</option><option value="monthly">Every month</option></select><select value={engineTaskDependency} onChange={e=>setEngineTaskDependency(e.target.value)}><option value="">No dependency</option>{tasks.filter(t=>t.status!=="completed").slice(0,30).map(t=><option key={t.id} value={t.id}>After: {t.title}</option>)}</select><select value={engineTaskGoal} onChange={e=>setEngineTaskGoal(e.target.value)}><option value="">No goal (optional)</option>{goals.filter(g=>g.status==="active").map(g=><option key={g.id} value={g.id}>{g.title}</option>)}</select><button className="primary-small" onClick={createEngineTask}><Plus size={15}/> Create task</button></div></article>
           <article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">PROJECTS</span><h2>Workstreams with a finish line.</h2></div><BriefcaseBusiness size={20}/></div><div className="engine-project-create"><input value={projectName} onChange={e=>setProjectName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addProject()} placeholder="New project name…"/><button className="primary-small project-add-button" onClick={addProject}><Plus size={15}/> Project</button></div><div className="engine-project-list">{engineProjects.map(p=><div key={p.id}><div><b>{p.name}</b><small>{p.completed}/{p.items.length} tasks complete</small></div><strong>{p.progress}%</strong><i><em style={{width:`${p.progress}%`}}/></i></div>)}{!projects.length&&<div className="tracker-empty-big"><BriefcaseBusiness size={26}/><h3>Create your first workstream.</h3><p>Projects group tasks into a measurable outcome.</p></div>}</div></article>
         </div>
@@ -1480,13 +1810,12 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
         <article className="tracker-hero-card task-work-summary"><div><span>TODAY'S WORK</span><strong>{todayTasks.length}</strong><p>{done} completed · {todayTasks.length-done} remaining</p></div><div className="task-summary-progress"><span>{todayTasks.length?Math.round(done/todayTasks.length*100):0}% complete</span><div className="tracker-progress"><i style={{width:`${todayTasks.length?done/todayTasks.length*100:0}%`}}/></div></div></article>
         <article className="tracker-large-card task-capture-card"><div className="panel-heading"><div><span className="card-kicker">QUICK CAPTURE</span><h2>Add a task here.</h2><p className="tracker-copy">Capture work without leaving the task system.</p></div><Plus size={20}/></div><div className="task-quick-add"><input value={taskQuickTitle} onChange={e=>setTaskQuickTitle(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addQuickTask()} placeholder="What needs to get done?"/><select value={taskQuickPriority} onChange={e=>setTaskQuickPriority(e.target.value)}><option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><input type="date" value={taskQuickDate} onChange={e=>setTaskQuickDate(e.target.value)}/><select value={taskQuickGoal} onChange={e=>setTaskQuickGoal(e.target.value)}><option value="">No goal (optional)</option>{goals.filter(g=>g.status==="active").map(g=><option key={g.id} value={g.id}>{g.title}</option>)}</select><button className="primary-small task-add-button" onClick={addQuickTask}><Plus size={15}/> Add task</button></div><div className="panel-heading task-queue-heading"><div><span className="card-kicker">PRIORITY QUEUE</span><h2>What needs your attention</h2></div><ListChecks size={20}/></div>{todayTasks.length?<div className="tracker-task-table">{todayTasks.slice(0,12).map(t=>editingTaskId===t.id?<div className="tracker-task-row tracker-task-row-edit" key={t.id}><span className={`tracker-status-dot ${t.status}`}></span><input className="task-inline-title" value={taskEdit.title} onChange={e=>setTaskEdit({...taskEdit,title:e.target.value})}/><select value={taskEdit.priority} onChange={e=>setTaskEdit({...taskEdit,priority:e.target.value})}><option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><input type="date" value={taskEdit.task_date} onChange={e=>setTaskEdit({...taskEdit,task_date:e.target.value})}/><select value={taskEdit.goal_id} onChange={e=>setTaskEdit({...taskEdit,goal_id:e.target.value})}><option value="">No goal</option>{goals.filter(g=>g.status==="active").map(g=><option key={g.id} value={g.id}>{g.title}</option>)}</select><div className="task-row-actions"><button className="primary-small task-save-button" onClick={saveTaskEdit}>Save changes</button><button className="ghost-small" onClick={cancelEditTask}>Cancel</button></div></div>:<div className="tracker-task-row" key={t.id}><button className={`task-check-button ${t.status==="completed"?"done":""}`} onClick={()=>toggleTask?.(t)} aria-label={t.status==="completed"?"Mark task open":"Mark task complete"}>{t.status==="completed"?<Check size={12}/>:null}</button><div className="task-row-main"><b className={t.status==="completed"?"task-completed-title":""}>{t.title}</b><small>{String(t.priority||"medium")} · Due {t.task_date||"No date"}{t.goal_id?` · Goal · ${goals.find(g=>String(g.id)===String(t.goal_id))?.title||"Linked goal"}`:""}</small></div><span className="task-status-label">{t.status==="completed"?"Completed":"Open"}</span><div className="task-row-actions"><button className="task-edit-button" onClick={()=>startEditTask(t)} aria-label={`Edit ${t.title}`} title="Edit task"><PenLine size={15}/></button><button className="task-edit-button task-delete-inline" onClick={()=>deleteTask?.(t)} aria-label={`Delete ${t.title}`} title="Delete task"><Trash2 size={15}/></button></div></div>)}</div>:<div className="tracker-empty-big"><ListChecks size={28}/><h3>Your queue is clear.</h3><p>Add a task above to build today's runway.</p></div>}</article>
       </section>}
-      {tab==="goals"&&<section className="goals-route-shell"><GoalsPage session={session} goals={goals} setGoals={setGoals} tasks={tasks} theme={theme} toggleTheme={toggleTheme} onBack={onBack} onError={(message)=>window.alert(message)} /></section>}
-      {tab==="habits"&&<section className="tracker-content-grid habits-workspace"><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">CONSISTENCY ENGINE</span><h2>Build habits by showing up.</h2><p className="tracker-copy">Set a habit for a defined duration, then manually mark each day complete. No automatic streaks.</p></div><Flame size={20}/></div><div className="habit-control-bar"><div><strong>{habits.length}</strong><span>habits in your system</span></div><button className="tracker-big-action compact" onClick={openNewHabit}><Plus size={16}/> New habit</button></div>{showHabitForm&&<div className="habit-form-card"><div className="habit-form-head"><div><span className="card-kicker">{editingHabitId?"EDIT HABIT":"NEW HABIT"}</span><h3>{editingHabitId?"Refine your routine.":"What are you building?"}</h3></div><button className="icon-button" onClick={()=>setShowHabitForm(false)} aria-label="Close">×</button></div><div className="habit-form-grid"><label>Habit name<input value={habitForm.title} onChange={e=>setHabitForm({...habitForm,title:e.target.value})} placeholder="e.g. Read 20 pages"/></label><label>Start date<input type="date" value={habitForm.startDate} onChange={e=>setHabitForm({...habitForm,startDate:e.target.value})}/></label><label>Duration (days)<input type="number" min="1" max="365" value={habitForm.durationDays} onChange={e=>setHabitForm({...habitForm,durationDays:e.target.value})}/></label></div><div className="habit-form-actions"><button className="ghost-small" onClick={()=>setShowHabitForm(false)}>Cancel</button><button className="primary-small" onClick={saveHabit}>{editingHabitId?"Save changes":"Create habit"}</button></div></div>}<div className="habit-system-list">{habits.length ? habits.map(renderHabitCard) : <div className="tracker-empty-big"><Flame size={28}/><h3>Start your first habit.</h3><p>Choose a habit, give it a duration, and manually check each day you complete it.</p><button className="tracker-big-action compact" onClick={openNewHabit}><Plus size={16}/> Create your first habit</button></div>}</div></article></section>}
+      {tab==="goals"&&<section className="goals-route-shell"><GoalsPage session={session} goals={goals} setGoals={setGoals} tasks={tasks} taskMeta={taskMeta} setTaskMeta={setTaskMeta} theme={theme} toggleTheme={toggleTheme} onBack={onBack} onError={(message)=>window.alert(message)} /></section>}
+      {tab==="habits"&&<section className="tracker-content-grid habits-workspace"><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">CONSISTENCY ENGINE</span><h2>Build habits by showing up.</h2><p className="tracker-copy">Set a habit for a defined duration and choose exactly when it should be practiced. TRACKEN keeps rest days separate from missed days.</p></div><Flame size={20}/></div><div className="habit-control-bar"><div><strong>{habits.length}</strong><span>habits in your system</span></div><button className="tracker-big-action compact" onClick={openNewHabit}><Plus size={16}/> New habit</button></div>{showHabitForm&&<div className="habit-form-card"><div className="habit-form-head"><div><span className="card-kicker">{editingHabitId?"EDIT HABIT":"NEW HABIT"}</span><h3>{editingHabitId?"Refine your routine.":"What are you building?"}</h3></div><button className="icon-button" onClick={()=>setShowHabitForm(false)} aria-label="Close">×</button></div><div className="habit-form-grid"><label>Habit name<input value={habitForm.title} onChange={e=>setHabitForm({...habitForm,title:e.target.value})} placeholder="e.g. Read 20 pages"/></label><label>Start date<input type="date" value={habitForm.startDate} onChange={e=>setHabitForm({...habitForm,startDate:e.target.value})}/></label><label>Duration (days)<input type="number" min="1" max="365" value={habitForm.durationDays} onChange={e=>setHabitForm({...habitForm,durationDays:e.target.value})}/></label><label>Schedule<select value={habitForm.scheduleType} onChange={e=>setHabitForm({...habitForm,scheduleType:e.target.value})}><option value="daily">Every day</option><option value="weekdays">Weekdays</option><option value="custom">Custom days</option></select></label></div>{habitForm.scheduleType==="custom"&&<div className="habit-schedule-days"><span>Repeat on</span><div>{[[1,"Mon"],[2,"Tue"],[3,"Wed"],[4,"Thu"],[5,"Fri"],[6,"Sat"],[0,"Sun"]].map(([value,label])=>{const selected=(habitForm.scheduleDays||[]).includes(value);return <button key={value} type="button" className={selected?"selected":""} onClick={()=>setHabitForm(f=>({...f,scheduleDays:selected?(f.scheduleDays||[]).filter(d=>d!==value):[...(f.scheduleDays||[]),value]}))}>{label}</button>})}</div><small>Select at least one day. Rest days stay visible but cannot be marked complete.</small></div>}<div className="habit-form-actions"><button className="ghost-small" onClick={()=>setShowHabitForm(false)}>Cancel</button><button className="primary-small" onClick={saveHabit}>{editingHabitId?"Save changes":"Create habit"}</button></div></div>}<div className="habit-system-list">{habits.length ? habits.map(renderHabitCard) : <div className="tracker-empty-big"><Flame size={28}/><h3>Start your first habit.</h3><p>Choose a habit, give it a duration, and manually check each day you complete it.</p><button className="tracker-big-action compact" onClick={openNewHabit}><Plus size={16}/> Create your first habit</button></div>}</div></article></section>}
       {tab==="focus"&&<section className="tracker-focus-layout"><article className="focus-command-card"><span>DEEP WORK</span><div className="tracker-focus-clock">{formatFocus(focusSeconds)}</div><div className="focus-presets">{[25,50,90].map(p=><button className={focusPreset===p?"selected":""} key={p} onClick={()=>{setFocusPreset(p);setFocusSeconds(p*60);setFocusRunning(false)}}>{p}m</button>)}</div><div className="focus-actions"><button className="primary-small" onClick={()=>setFocusRunning(v=>!v)}>{focusRunning?"Pause":"Start focus"}</button><button className="ghost-small" onClick={()=>{setFocusRunning(false);setFocusSeconds(focusPreset*60)}}>Reset</button></div></article><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">FOCUS PRINCIPLE</span><h2>Protect your best hours.</h2></div><Zap size={20}/></div><p className="tracker-copy">Use a focused session for the one task that matters most. TRACKEN keeps deep work and execution measurable without cluttering your workflow.</p><div className="tracker-feature-list"><span><Check size={15}/> No distractions</span><span><Check size={15}/> Preset sessions</span><span><Check size={15}/> Works with Study & Tasks</span></div></article><article className="tracker-large-card focus-time-card"><div className="panel-heading"><div><span className="card-kicker">TIME TRACKER</span><h2>Make time visible.</h2></div><Clock3 size={20}/></div><div className="focus-time-row"><div><strong>{formatTime(trackedSeconds)}</strong><span>{timeRunning?"Tracking now":"Time captured today"}</span></div><button className={`tracker-big-action compact ${timeRunning?"running":""}`} onClick={()=>setTimeRunning(v=>!v)}>{timeRunning?"Stop tracking":trackedSeconds>0?"Resume tracking":"Start tracking"}</button></div></article></section>}
-      {tab==="money"&&<section className="tracker-money"><div className="money-kpis"><article><span>INCOME</span><strong>₹{totalIncome.toLocaleString("en-IN")}</strong></article><article><span>EXPENSES</span><strong>₹{totalExpense.toLocaleString("en-IN")}</strong></article><article><span>BALANCE</span><strong>₹{moneyBalance.toLocaleString("en-IN")}</strong></article></div><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">CASH FLOW</span><h2>Track every rupee.</h2></div><WalletCards size={20}/></div><div className="tracker-add-row money-add"><select value={entry.type} onChange={e=>setEntry({...entry,type:e.target.value})}><option value="expense">Expense</option><option value="income">Income</option></select><input value={entry.title} onChange={e=>setEntry({...entry,title:e.target.value})} placeholder="Description"/><input type="number" value={entry.amount} onChange={e=>setEntry({...entry,amount:e.target.value})} placeholder="Amount"/><button onClick={addMoney}><Plus size={16}/> Add</button></div><div className="tracker-transaction-list">{money.slice(0,15).map(x=>editingMoneyId===x.id?<div className="transaction-edit-row" key={x.id}><select value={moneyEdit.type} onChange={e=>setMoneyEdit({...moneyEdit,type:e.target.value})}><option value="expense">Expense</option><option value="income">Income</option></select><input value={moneyEdit.title} onChange={e=>setMoneyEdit({...moneyEdit,title:e.target.value})}/><input type="number" value={moneyEdit.amount} onChange={e=>setMoneyEdit({...moneyEdit,amount:e.target.value})}/><input value={moneyEdit.category} onChange={e=>setMoneyEdit({...moneyEdit,category:e.target.value})}/><button className="primary-small" onClick={saveMoneyEdit}>Save</button><button className="ghost-small" onClick={()=>setEditingMoneyId(null)}>Cancel</button></div>:<div key={x.id}><span className={x.type}>{x.type==="income"?<TrendingUp size={16}/>:<TrendingDown size={16}/>}</span><b>{x.title}</b><small>{x.category}</small><strong className={x.type}>{x.type==="income"?"+":"−"}₹{Number(x.amount).toLocaleString("en-IN")}</strong><div className="row-actions"><button aria-label="Edit transaction" onClick={()=>startEditMoney(x)}><PenLine size={15}/></button><button aria-label="Delete transaction" onClick={()=>deleteMoney(x.id)}><Trash2 size={15}/></button></div></div>)}{!money.length&&<div className="tracker-empty-big"><Receipt size={28}/><h3>No transactions yet.</h3><p>Add your first income or expense to start your money timeline.</p></div>}</div></article><article className="tracker-large-card budget-inline-card"><div className="panel-heading"><div><span className="card-kicker">BUDGET</span><h2>Give your cashflow a boundary.</h2><p className="tracker-copy">Set your monthly spending limit without leaving Cashflow.</p></div><PieChart size={20}/></div><div className="budget-editor"><input type="number" value={budget||""} onChange={e=>setBudget(Number(e.target.value)||0)} placeholder="Monthly budget"/><div className="budget-track"><i style={{width:`${budget?Math.min(100,totalExpense/budget*100):0}%`}}/></div><b>{budget?Math.round(totalExpense/budget*100):0}% used</b></div><div className="budget-inline-meta"><span>Spent <b>₹{totalExpense.toLocaleString("en-IN")}</b></span><span>Remaining <b className={budget-totalExpense>=0?"positive":"negative"}>₹{Math.abs(budget-totalExpense).toLocaleString("en-IN")}</b></span></div></article></section>}
-      {tab==="budget"&&<section className="tracker-money"><div className="money-kpis"><article><span>MONTHLY BUDGET</span><strong>₹{Number(budget).toLocaleString("en-IN")}</strong></article><article><span>SPENT</span><strong>₹{totalExpense.toLocaleString("en-IN")}</strong></article><article><span>REMAINING</span><strong className={budget-totalExpense>=0?"positive":"negative"}>₹{Math.abs(budget-totalExpense).toLocaleString("en-IN")}</strong></article></div><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">BUDGET CONTROL</span><h2>Give your money a boundary.</h2></div><PieChart size={20}/></div><div className="budget-editor"><input type="number" value={budget||""} onChange={e=>setBudget(Number(e.target.value)||0)} placeholder="Monthly budget"/><div className="budget-track"><i style={{width:`${budget?Math.min(100,totalExpense/budget*100):0}%`}}/></div><b>{budget?Math.round(totalExpense/budget*100):0}% used</b></div><div className="tracker-stat-grid"><div><b>₹{totalIncome.toLocaleString("en-IN")}</b><span>Income</span></div><div><b>₹{totalExpense.toLocaleString("en-IN")}</b><span>Expenses</span></div><div><b>{money.filter(x=>x.type==="expense").length}</b><span>Purchases</span></div><div><b>{budget?Math.max(0,Math.round(budget-totalExpense)):0}</b><span>Room left</span></div></div></article></section>}
-      {tab==="investments"&&<section className="tracker-money"><div className="money-kpis"><article><span>PORTFOLIO</span><strong>₹{portfolio.toLocaleString("en-IN")}</strong></article><article><span>INVESTED</span><strong>₹{invested.toLocaleString("en-IN")}</strong></article><article><span>GAIN / LOSS</span><strong className={portfolio-invested>=0?"positive":"negative"}>{portfolio-invested>=0?"+":"−"}₹{Math.abs(portfolio-invested).toLocaleString("en-IN")}</strong></article></div><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">PORTFOLIO</span><h2>Keep your holdings visible.</h2></div><BriefcaseBusiness size={20}/></div><div className="tracker-add-row money-add"><input value={holding.name} onChange={e=>setHolding({...holding,name:e.target.value})} placeholder="Asset / fund name"/><input type="number" value={holding.invested} onChange={e=>setHolding({...holding,invested:e.target.value})} placeholder="Invested"/><input type="number" value={holding.value} onChange={e=>setHolding({...holding,value:e.target.value})} placeholder="Current value"/><button onClick={addInvestment}><Plus size={16}/> Add</button></div><div className="tracker-transaction-list">{investments.map(x=>editingInvestmentId===x.id?<div className="transaction-edit-row" key={x.id}><input value={investmentEdit.name} onChange={e=>setInvestmentEdit({...investmentEdit,name:e.target.value})}/><input type="number" value={investmentEdit.invested} onChange={e=>setInvestmentEdit({...investmentEdit,invested:e.target.value})}/><input type="number" value={investmentEdit.value} onChange={e=>setInvestmentEdit({...investmentEdit,value:e.target.value})}/><button className="primary-small" onClick={saveInvestmentEdit}>Save</button><button className="ghost-small" onClick={()=>setEditingInvestmentId(null)}>Cancel</button></div>:<div key={x.id}><span className="investment"><Percent size={16}/></span><b>{x.name}</b><small>₹{Number(x.invested).toLocaleString("en-IN")} invested</small><strong>₹{Number(x.value).toLocaleString("en-IN")}</strong><div className="row-actions"><button aria-label="Edit investment" onClick={()=>startEditInvestment(x)}><PenLine size={15}/></button><button aria-label="Delete investment" onClick={()=>deleteInvestment(x.id)}><Trash2 size={15}/></button></div></div>)}{!investments.length&&<div className="tracker-empty-big"><BriefcaseBusiness size={28}/><h3>Your portfolio is empty.</h3><p>Add holdings manually. Market integrations can be connected later.</p></div>}</div></article></section>}
-      {tab==="networth"&&<section className="tracker-money"><div className="money-kpis"><article><span>NET WORTH</span><strong>₹{(portfolio+moneyBalance+assets.reduce((a,x)=>a+Number(x.value||0),0)-liabilities.reduce((a,x)=>a+Number(x.value||0),0)).toLocaleString("en-IN")}</strong></article><article><span>TOTAL ASSETS</span><strong>₹{(portfolio+Math.max(0,moneyBalance)+assets.reduce((a,x)=>a+Number(x.value||0),0)).toLocaleString("en-IN")}</strong></article><article><span>LIABILITIES</span><strong className="negative">₹{liabilities.reduce((a,x)=>a+Number(x.value||0),0).toLocaleString("en-IN")}</strong></article></div><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">PERSONAL BALANCE SHEET</span><h2>Know what you own and owe.</h2></div><Landmark size={20}/></div><div className="tracker-add-row"><button onClick={addAsset}><Plus size={16}/> Add asset</button><button onClick={addLiability}><Plus size={16}/> Add liability</button></div><div className="tracker-stat-grid"><div><b>₹{portfolio.toLocaleString("en-IN")}</b><span>Investments</span></div><div><b>₹{Math.max(0,moneyBalance).toLocaleString("en-IN")}</b><span>Cash balance</span></div><div><b>{assets.length}</b><span>Other assets</span></div><div><b>{liabilities.length}</b><span>Liabilities</span></div></div><div className="balance-lists"><div><span>ASSETS</span>{assets.length?assets.map(x=><p key={x.id}><b>{x.name}</b><strong>₹{Number(x.value).toLocaleString("en-IN")}</strong></p>):<p className="muted-row">No other assets added.</p>}</div><div><span>LIABILITIES</span>{liabilities.length?liabilities.map(x=><p key={x.id}><b>{x.name}</b><strong>₹{Number(x.value).toLocaleString("en-IN")}</strong></p>):<p className="muted-row">No liabilities added.</p>}</div></div></article></section>}
+      {((tab==="money")||(tab==="budget"))&&<FinanceEngine tab={tab} money={money} setMoney={setMoney} budget={budget} setBudget={setBudget} budgetOverride={budgetOverride} setBudgetOverride={setBudgetOverride} budgetCategories={budgetCategories} setBudgetCategories={setBudgetCategories} cashflowAutomationRules={cashflowAutomationRules} cashflowFrequencyLabel={cashflowFrequencyLabel} createCashflowAutomation={createCashflowAutomation} toggleCashflowAutomation={toggleCashflowAutomation} deleteCashflowAutomation={deleteCashflowAutomation} cashflowAutomationTitle={cashflowAutomationTitle} setCashflowAutomationTitle={setCashflowAutomationTitle} cashflowAutomationType={cashflowAutomationType} setCashflowAutomationType={setCashflowAutomationType} cashflowAutomationAmount={cashflowAutomationAmount} setCashflowAutomationAmount={setCashflowAutomationAmount} cashflowAutomationCategory={cashflowAutomationCategory} setCashflowAutomationCategory={setCashflowAutomationCategory} cashflowAutomationFrequency={cashflowAutomationFrequency} setCashflowAutomationFrequency={setCashflowAutomationFrequency} cashflowAutomationStartDate={cashflowAutomationStartDate} setCashflowAutomationStartDate={setCashflowAutomationStartDate} cashflowAutomationEndDate={cashflowAutomationEndDate} setCashflowAutomationEndDate={setCashflowAutomationEndDate} goals={goals} setGoals={setGoals} financeGoalPlans={financeGoalPlans} setFinanceGoalPlans={setFinanceGoalPlans} financeGoals={financeGoals} setFinanceGoals={setFinanceGoals} onGoalContribution={addFinanceGoalContribution} createFinanceGoal={createFinanceGoal} session={session} />}
+      {tab==="investments"&&<section className="tracker-money finance-wealth-page"><div className="money-kpis"><article><span>PORTFOLIO VALUE</span><strong>₹{portfolio.toLocaleString("en-IN")}</strong></article><article><span>INVESTED CAPITAL</span><strong>₹{invested.toLocaleString("en-IN")}</strong></article><article><span>GAIN / LOSS</span><strong className={portfolio-invested>=0?"positive":"negative"}>{portfolio-invested>=0?"+":"−"}₹{Math.abs(portfolio-invested).toLocaleString("en-IN")}</strong></article><article><span>RETURN</span><strong>{invested>0?`${((portfolio-invested)/invested*100).toFixed(1)}%`:"—"}</strong></article></div><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">INVESTMENT PORTFOLIO</span><h2>Understand every holding.</h2><p className="tracker-copy">Track invested capital, current value, profit or loss and portfolio weight.</p></div><BriefcaseBusiness size={20}/></div><div className="tracker-add-row money-add"><input value={holding.name} onChange={e=>setHolding({...holding,name:e.target.value})} placeholder="Asset / fund name"/><input type="number" value={holding.invested} onChange={e=>setHolding({...holding,invested:e.target.value})} placeholder="Invested capital"/><input type="number" value={holding.value} onChange={e=>setHolding({...holding,value:e.target.value})} placeholder="Current value"/><button onClick={addInvestment}><Plus size={16}/> Add holding</button></div><div className="investment-table-wrap"><table className="investment-table"><thead><tr><th>Holding</th><th>Invested</th><th>Current</th><th>Gain / Loss</th><th>Return</th><th>Weight</th><th></th></tr></thead><tbody>{investments.map(x=>{const gain=Number(x.value||0)-Number(x.invested||0);const ret=Number(x.invested||0)>0?gain/Number(x.invested)*100:0;const weight=portfolio>0?Number(x.value||0)/portfolio*100:0;return editingInvestmentId===x.id?<tr key={x.id}><td><input value={investmentEdit.name} onChange={e=>setInvestmentEdit({...investmentEdit,name:e.target.value})}/></td><td><input type="number" value={investmentEdit.invested} onChange={e=>setInvestmentEdit({...investmentEdit,invested:e.target.value})}/></td><td><input type="number" value={investmentEdit.value} onChange={e=>setInvestmentEdit({...investmentEdit,value:e.target.value})}/></td><td colSpan="3">Edit holding details</td><td><button className="primary-small" onClick={saveInvestmentEdit}>Save</button><button className="ghost-small" onClick={()=>setEditingInvestmentId(null)}>Cancel</button></td></tr>:<tr key={x.id}><td><b>{x.name}</b></td><td>{fmtIN(x.invested)}</td><td>{fmtIN(x.value)}</td><td className={gain>=0?"positive":"negative"}>{gain>=0?"+":"−"}{fmtIN(Math.abs(gain))}</td><td className={gain>=0?"positive":"negative"}>{ret.toFixed(1)}%</td><td>{weight.toFixed(1)}%</td><td><div className="row-actions"><button onClick={()=>startEditInvestment(x)} aria-label="Edit investment"><PenLine size={15}/></button><button onClick={()=>deleteInvestment(x.id)} aria-label="Delete investment"><Trash2 size={15}/></button></div></td></tr>})}</tbody></table></div>{!investments.length&&<div className="tracker-empty-big"><BriefcaseBusiness size={28}/><h3>Your portfolio is empty.</h3><p>Add holdings to see detailed performance.</p></div>}</article><div className="finance-wealth-grid"><article className="tracker-large-card"><PanelHead kicker="ALLOCATION" title="Portfolio mix" icon={<PieChart size={20}/>}/>{investments.length?investments.map(x=><div className="finance-bar-row" key={x.id}><div><span>{x.name}</span><b>{portfolio?`${(Number(x.value||0)/portfolio*100).toFixed(1)}%`:"0%"}</b></div><i><em style={{width:`${portfolio?clamp(Number(x.value||0)/portfolio*100,2,100):0}%`}}/></i></div>):<div className="finance-empty">Add holdings to build your allocation.</div>}</article><article className="tracker-large-card"><PanelHead kicker="PORTFOLIO INSIGHT" title="What your numbers say" icon={<Sparkles size={20}/>}/><p className="tracker-copy finance-readable-copy">{portfolio>=invested?`Your portfolio is currently ${fmtIN(portfolio-invested)} above invested capital.`:`Your portfolio is currently ${fmtIN(invested-portfolio)} below invested capital.`}</p><p className="tracker-copy">Use current value as the latest manual valuation. TRACKEN does not fetch live market prices yet.</p></article></div></section>}
+      {tab==="networth"&&<section className="tracker-money finance-wealth-page"><div className="money-kpis"><article><span>NET WORTH</span><strong>₹{(portfolio+Math.max(0,moneyBalance)+assets.reduce((a,x)=>a+Number(x.value||0),0)-liabilities.reduce((a,x)=>a+Number(x.value||0),0)).toLocaleString("en-IN")}</strong></article><article><span>TOTAL ASSETS</span><strong>₹{(portfolio+Math.max(0,moneyBalance)+assets.reduce((a,x)=>a+Number(x.value||0),0)).toLocaleString("en-IN")}</strong></article><article><span>LIABILITIES</span><strong className="negative">₹{liabilities.reduce((a,x)=>a+Number(x.value||0),0).toLocaleString("en-IN")}</strong></article><article><span>LIQUID CASH</span><strong>₹{Math.max(0,moneyBalance).toLocaleString("en-IN")}</strong></article></div><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">PERSONAL BALANCE SHEET</span><h2>Know what you own and owe.</h2><p className="tracker-copy">Keep investments, cash, other assets and outstanding liabilities together.</p></div><Landmark size={20}/></div><div className="tracker-add-row"><button onClick={addAsset}><Plus size={16}/> Add asset</button><button onClick={addLiability}><Plus size={16}/> Add liability</button></div><div className="tracker-stat-grid"><div><b>₹{portfolio.toLocaleString("en-IN")}</b><span>Investments</span></div><div><b>₹{Math.max(0,moneyBalance).toLocaleString("en-IN")}</b><span>Cash</span></div><div><b>{assets.length}</b><span>Other assets</span></div><div><b>{liabilities.length}</b><span>Liabilities</span></div></div><div className="balance-lists"><div><span>ASSETS</span>{assets.length?assets.map(x=>editingAssetId===x.id?<div className="wealth-edit-row" key={x.id}><input value={assetEdit.name} onChange={e=>setAssetEdit({...assetEdit,name:e.target.value})}/><input type="number" value={assetEdit.value} onChange={e=>setAssetEdit({...assetEdit,value:e.target.value})}/><button className="primary-small" onClick={saveAssetEdit}>Save</button><button className="ghost-small" onClick={()=>setEditingAssetId(null)}>Cancel</button></div>:<p key={x.id}><b>{x.name}</b><strong>{fmtIN(x.value)}</strong><span className="wealth-actions"><button onClick={()=>startEditAsset(x)} aria-label="Edit asset"><PenLine size={14}/></button><button onClick={()=>deleteAsset(x.id)} aria-label="Delete asset"><Trash2 size={14}/></button></span></p>):<p className="muted-row">No other assets added.</p>}</div><div><span>LIABILITIES</span>{liabilities.length?liabilities.map(x=>editingLiabilityId===x.id?<div className="wealth-edit-row" key={x.id}><input value={liabilityEdit.name} onChange={e=>setLiabilityEdit({...liabilityEdit,name:e.target.value})}/><input type="number" value={liabilityEdit.value} onChange={e=>setLiabilityEdit({...liabilityEdit,value:e.target.value})}/><button className="primary-small" onClick={saveLiabilityEdit}>Save</button><button className="ghost-small" onClick={()=>setEditingLiabilityId(null)}>Cancel</button></div>:<p key={x.id}><b>{x.name}</b><strong>{fmtIN(x.value)}</strong><span className="wealth-actions"><button onClick={()=>startEditLiability(x)} aria-label="Edit liability"><PenLine size={14}/></button><button onClick={()=>deleteLiability(x.id)} aria-label="Delete liability"><Trash2 size={14}/></button></span></p>):<p className="muted-row">No liabilities added.</p>}</div></div></article><div className="finance-wealth-grid"><article className="tracker-large-card"><PanelHead kicker="NET WORTH COMPOSITION" title="Where your wealth sits" icon={<CircleDollarSign size={20}/>}/><div className="finance-wealth-stat"><span>Investments</span><b>{fmtIN(portfolio)}</b></div><div className="finance-wealth-stat"><span>Cash</span><b>{fmtIN(Math.max(0,moneyBalance))}</b></div><div className="finance-wealth-stat"><span>Other assets</span><b>{fmtIN(assets.reduce((a,x)=>a+Number(x.value||0),0))}</b></div><div className="finance-wealth-stat"><span>Less liabilities</span><b className="negative">−{fmtIN(liabilities.reduce((a,x)=>a+Number(x.value||0),0))}</b></div></article><article className="tracker-large-card"><PanelHead kicker="NET WORTH INSIGHT" title="Your financial position" icon={<Sparkles size={20}/>}/><p className="tracker-copy finance-readable-copy">Net worth is calculated as investments + cash + other assets − liabilities.</p><p className="tracker-copy">Update asset and liability values whenever your latest balances change.</p></article></div></section>}
       {showStudySummary&&<StudySummaryModal history={history} onClose={()=>setShowStudySummary(false)} />}
       </main></div></div>;
 }
@@ -1777,7 +2106,7 @@ function CalendarHistoryPage({ session, theme, toggleTheme, onBack }) {
 }
 
 
-function WeeklyReviewPage({ session, theme, toggleTheme, tasks, history, goals, habits, activityLog, trackedSeconds, completedFocusSessions, score, onBack }) {
+function WeeklyReviewPage({ session, theme, toggleTheme, tasks, history, goals, habits, activityLog, trackedSeconds, completedFocusSessions, score, reviewAutomation, setReviewAutomation, reviewSnapshots, onGenerateReviews, onBack }) {
   const now = new Date();
   const weekStart = new Date(now); weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7)); weekStart.setHours(0,0,0,0);
   const inWeek = (iso) => new Date(iso) >= weekStart;
@@ -1798,10 +2127,12 @@ function WeeklyReviewPage({ session, theme, toggleTheme, tasks, history, goals, 
   return <div className="review-shell">
     <header className="review-topbar"><div className="tracker-page-brand"><button className="back-button" onClick={onBack}><ArrowLeft size={17}/></button><div><span>TRACKEN</span><small>WEEKLY REVIEW</small></div></div><div className="tracker-page-actions"><button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode">{theme==='light'?<Moon size={17}/>:<Sun size={17}/>}<span>{theme==='light'?"Dark mode":"Light mode"}</span></button></div></header>
     <main className="review-workspace"><div className="review-heading"><div><span className="card-kicker">WEEKLY REVIEW · {weekStart.toLocaleDateString('en-US',{month:'short',day:'numeric'})} — {now.toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span><h1>Turn activity into <em>direction.</em></h1><p>A concise read of what you actually did, where momentum came from, and what deserves attention next.</p></div><div className="review-score"><span>TRACKEN SCORE</span><strong>{score}</strong><small>current momentum</small></div></div>
+    <section className="review-card review-automation-card"><div className="review-card-head"><div><span className="card-kicker">AUTOMATION CENTER · 05</span><h2>Automatic reviews.</h2><p>TRACKEN prepares a daily and weekly reflection from your actual activity. It runs when the app opens after a period closes.</p></div><Sparkles size={20}/></div><div className="review-automation-controls"><label><input type="checkbox" checked={reviewAutomation?.daily!==false} onChange={e=>setReviewAutomation(v=>({...v,daily:e.target.checked}))}/> Daily review</label><label><input type="checkbox" checked={reviewAutomation?.weekly!==false} onChange={e=>setReviewAutomation(v=>({...v,weekly:e.target.checked}))}/> Weekly review</label><button className="primary-small" onClick={onGenerateReviews}><RotateCcw size={14}/> Generate latest</button></div><div className="review-automation-note"><Clock3 size={14}/> Daily reviews summarize the previous day. Weekly reviews summarize the previous Monday–Sunday cycle. Existing reviews are never duplicated.</div></section>
     <section className="review-stat-grid"><ReviewStat label="Task execution" value={`${completion}%`} meta={`${done}/${weekTasks.length} completed`}/><ReviewStat label="Study output" value={formatReviewMinutes(studyMinutes)} meta={`${questions} questions`}/><ReviewStat label="Focus" value={`${focus}m`} meta={`${completedFocusSessions} sessions total`}/><ReviewStat label="Active days" value={activeDays} meta={`${habitDone} habits completed`}/></section>
     <section className="review-grid"><article className="review-card"><div className="review-card-head"><div><span className="card-kicker">WHAT WORKED</span><h2>Your strongest signal</h2></div><Award size={20}/></div><div className="review-highlight"><strong>{strongest}</strong><p>{strongest==='Execution' ? `You completed ${completion}% of planned tasks this week.` : strongest==='Study' ? `You logged ${formatReviewMinutes(studyMinutes)} of study and ${questions} questions.` : strongest==='Consistency' ? `You completed ${habitDone} habit check-ins and kept your routine visible.` : 'You have enough activity to start identifying a repeatable personal rhythm.'}</p></div></article><article className="review-card"><div className="review-card-head"><div><span className="card-kicker">NEXT WEEK</span><h2>One clear move</h2></div><Zap size={20}/></div><div className="review-next"><div className="review-next-icon"><Zap size={20}/></div><p>{next}</p></div></article></section>
     <section className="review-card"><div className="review-card-head"><div><span className="card-kicker">CONNECTED PROGRESS</span><h2>Effort → outcome</h2><p>TRACKEN's core promise is to connect your daily evidence to meaningful progress.</p></div><TrendingUp size={20}/></div><div className="review-flow"><ReviewFlow label="Execution" value={completion}/><span>→</span><ReviewFlow label="Consistency" value={Math.min(100,Math.round((habitDone/Math.max(7,habits.length*7))*100))}/><span>→</span><ReviewFlow label="Goal" value={progress}/></div></section>
     <section className="review-card"><div className="review-card-head"><div><span className="card-kicker">WEEKLY SNAPSHOT</span><h2>Your operating rhythm</h2></div><BarChart3 size={20}/></div><div className="review-bars">{Array.from({length:7},(_,i)=>{const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);const key=d.toISOString().slice(0,10);const mins=weekRecords.filter(r=>r.record_date===key).reduce((s,r)=>s+Number(r.lecture_minutes||0),0);const task=weekTasks.filter(t=>t.task_date===key).filter(t=>t.status==='completed').length;const h=Math.max(6,Math.min(100,mins/3+task*12));return <div key={key}><i style={{height:`${h}%`}}/><span>{d.toLocaleDateString('en-US',{weekday:'short'}).slice(0,2)}</span></div>})}</div></section>
+    <section className="review-card"><div className="review-card-head"><div><span className="card-kicker">AUTOMATED HISTORY</span><h2>Recent reflections</h2><p>Saved snapshots stay available even after the next review is generated.</p></div><ClipboardList size={20}/></div><div className="review-snapshot-grid">{(reviewSnapshots||[]).slice(0,6).map(s=><article className="review-snapshot" key={s.id}><div><span>{s.type==='daily'?'DAILY':'WEEKLY'}</span><small>{s.periodStart} → {s.periodEnd}</small></div><strong>{s.strongest}</strong><p>{s.metrics?.taskPct||0}% tasks · {formatReviewMinutes(s.metrics?.studyMinutes||0)} study · {s.metrics?.habitPct||0}% habits</p><em>{s.next}</em></article>)}{!(reviewSnapshots||[]).length&&<div className="review-empty-state">Your first completed-period reflection will appear here automatically.</div>}</div></section>
     </main></div>;
 }
 function ReviewStat({label,value,meta}){return <div className="review-stat"><span>{label}</span><strong>{value}</strong><small>{meta}</small></div>}
@@ -2517,7 +2848,7 @@ function StudySummaryModal({ history=[], onClose }) {
   return <div className="study-summary-overlay" role="dialog" aria-modal="true"><div className="study-summary-modal"><div className="study-summary-head"><div><span className="card-kicker">STUDY SUMMARY</span><h2>Your consistency, in full.</h2><p>Study evidence collected from your TRACKEN records.</p></div><button className="icon-close" onClick={onClose} aria-label="Close study summary"><X size={18}/></button></div><div className="streak-feature"><div><span>CURRENT STREAK</span><strong>{streak}<small> days</small></strong><p>{streak?"Keep the chain alive today.":"Log study activity today to start your streak."}</p></div><div><span>BEST STREAK</span><strong>{bestStreak}<small> days</small></strong><p>Your longest consecutive run.</p></div></div><div className="study-summary-stats"><div><b>{Math.floor(totalMinutes/60)}h {totalMinutes%60}m</b><span>Total study time</span></div><div><b>{totalLectures.toLocaleString()}</b><span>Lectures</span></div><div><b>{totalQuestions.toLocaleString()}</b><span>Questions</span></div><div><b>{totalPages.toLocaleString()}</b><span>Pages read</span></div><div><b>{studyDays.length}</b><span>Active study days</span></div><div><b>{history.filter(r=>r.exercise_done).length}</b><span>Exercise sessions</span></div><div><b>{avgScore}%</b><span>Average daily score</span></div><div><b>{history.length}</b><span>Records saved</span></div></div><div className="study-summary-periods"><article><span>LAST 7 DAYS</span><strong>{last7.length} active</strong><small>{last7.reduce((a,r)=>a+Number(r.lecture_minutes||0),0)} min · {last7.reduce((a,r)=>a+Number(r.questions_done||0),0)} questions</small></article><article><span>LAST 30 DAYS</span><strong>{last30.length} active</strong><small>{last30.reduce((a,r)=>a+Number(r.lecture_minutes||0),0)} min · {last30.reduce((a,r)=>a+Number(r.questions_done||0),0)} questions</small></article><article><span>RECENT BEST DAY</span><strong>{history.slice().sort((a,b)=>Number(b.daily_score||0)-Number(a.daily_score||0))[0]?.daily_score||0}%</strong><small>Highest recorded daily score</small></article></div><button className="primary-cta study-summary-close" onClick={onClose}>Back to Productivity Engine <ArrowRight size={16}/></button></div></div>;
 }
 
-function GoalsPage({ session, goals, setGoals, tasks, theme, toggleTheme, onBack, onError }) {
+function GoalsPage({ session, goals, setGoals, tasks, taskMeta, setTaskMeta, theme, toggleTheme, onBack, onError }) {
   const userId = session.user.id;
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -2526,6 +2857,15 @@ function GoalsPage({ session, goals, setGoals, tasks, theme, toggleTheme, onBack
     title: "", category: "Academic", target_date: "", priority: "medium",
     description: "", target_value: "", current_value: "", unit: ""
   });
+  const goalAutomationRules = Array.isArray(taskMeta?.__goal_automations) ? taskMeta.__goal_automations : [];
+  const [goalAutomationGoal, setGoalAutomationGoal] = useState("");
+  const [goalAutomationTitle, setGoalAutomationTitle] = useState("");
+  const [goalAutomationFrequency, setGoalAutomationFrequency] = useState("weekly");
+  const [goalAutomationStartDate, setGoalAutomationStartDate] = useState(new Date().toISOString().slice(0,10));
+  const [goalAutomationEndDate, setGoalAutomationEndDate] = useState("");
+  const [goalAutomationPriority, setGoalAutomationPriority] = useState("medium");
+  const [goalAutomationDuration, setGoalAutomationDuration] = useState(30);
+  const [goalAutomationSaving, setGoalAutomationSaving] = useState(false);
 
   const resetForm = () => {
     setForm({ title: "", category: "Academic", target_date: "", priority: "medium", description: "", target_value: "", current_value: "", unit: "" });
@@ -2573,6 +2913,7 @@ function GoalsPage({ session, goals, setGoals, tasks, theme, toggleTheme, onBack
     const { error } = await supabase.from("goals").delete().eq("id", goal.id).eq("user_id", userId);
     if (error) return onError(error.message);
     setGoals((current) => current.filter((item) => item.id !== goal.id));
+    setTaskMeta(current=>({...current,__goal_automations:(current.__goal_automations||[]).filter(r=>String(r.goalId)!==String(goal.id))}));
   };
 
   const completeGoal = async (goal) => {
@@ -2580,6 +2921,29 @@ function GoalsPage({ session, goals, setGoals, tasks, theme, toggleTheme, onBack
     const { data, error } = await supabase.from("goals").update({ status: nextStatus }).eq("id", goal.id).eq("user_id", userId).select().single();
     if (error) return onError(error.message);
     setGoals((current) => current.map((item) => item.id === goal.id ? data : item));
+  };
+
+  const createGoalAutomation = () => {
+    const goal = goals.find(g=>String(g.id)===String(goalAutomationGoal));
+    const title = goalAutomationTitle.trim() || (goal ? `Work on ${goal.title}` : "");
+    if (!goal) return onError("Choose an active goal for this automation.");
+    if (goal.status !== "active") return onError("Only active goals can have automations.");
+    const endDate = goalAutomationEndDate || goal.target_date || "";
+    if (!endDate) return onError("Set a target date on the goal or choose an automation end date.");
+    if (endDate < goalAutomationStartDate) return onError("End date must be on or after the start date.");
+    if (goal.target_date && endDate > goal.target_date) return onError("Automation cannot run past the goal target date.");
+    if (goalAutomationSaving) return;
+    setGoalAutomationSaving(true);
+    const rule={id:crypto.randomUUID(),goalId:goal.id,title,frequency:goalAutomationFrequency,startDate:goalAutomationStartDate,endDate,priority:goalAutomationPriority,duration:Number(goalAutomationDuration)||30,enabled:true,createdAt:new Date().toISOString()};
+    setTaskMeta(current=>({...current,__goal_automations:[rule,...(Array.isArray(current.__goal_automations)?current.__goal_automations:[])]}));
+    setGoalAutomationTitle("");
+    setGoalAutomationEndDate("");
+    setGoalAutomationSaving(false);
+  };
+  const toggleGoalAutomation = (ruleId) => setTaskMeta(current=>({...current,__goal_automations:(current.__goal_automations||[]).map(r=>r.id===ruleId?{...r,enabled:!r.enabled}:r)}));
+  const deleteGoalAutomation = (ruleId) => {
+    if (!window.confirm("Delete this goal automation? Existing tasks it already created will stay.")) return;
+    setTaskMeta(current=>({...current,__goal_automations:(current.__goal_automations||[]).filter(r=>r.id!==ruleId)}));
   };
 
   const getTaskStats = (goalId) => {
@@ -2626,6 +2990,26 @@ function GoalsPage({ session, goals, setGoals, tasks, theme, toggleTheme, onBack
             <div className="goal-editor-actions"><button className="secondary-cta" onClick={resetForm}>Cancel</button><button className="primary-cta" onClick={saveGoal} disabled={saving}>{saving ? "Saving…" : editingId ? "Save changes" : "Create goal"} <ArrowRight size={16} /></button></div>
           </section>
         )}
+
+        <section className="goal-automation-card tracker-large-card">
+          <div className="panel-heading"><div><span className="card-kicker">GOAL AUTOMATION · 02</span><h2>Turn goals into planned action.</h2><p className="tracker-copy">Choose an active goal once. TRACKEN can create linked action tasks on a daily, weekday, weekly or monthly rhythm until the goal deadline.</p></div><Zap size={20}/></div>
+          <div className="goal-automation-form-grid">
+            <select value={goalAutomationGoal} onChange={e=>{const id=e.target.value;setGoalAutomationGoal(id);const g=goals.find(x=>String(x.id)===String(id));if(g&&!goalAutomationTitle)setGoalAutomationTitle(`Work on ${g.title}`);}}>
+              <option value="">Choose an active goal</option>{activeGoals.map(g=><option key={g.id} value={g.id}>{g.title}{g.target_date?` · due ${g.target_date}`:""}</option>)}
+            </select>
+            <input value={goalAutomationTitle} onChange={e=>setGoalAutomationTitle(e.target.value)} placeholder="Task to create"/>
+            <select value={goalAutomationFrequency} onChange={e=>setGoalAutomationFrequency(e.target.value)}><option value="daily">Every day</option><option value="weekdays">Every weekday</option><option value="weekly">Every week</option><option value="monthly">Every month</option></select>
+            <input type="date" value={goalAutomationStartDate} onChange={e=>setGoalAutomationStartDate(e.target.value)} aria-label="Automation start date"/>
+            <input type="date" value={goalAutomationEndDate} onChange={e=>setGoalAutomationEndDate(e.target.value)} title="Optional: defaults to goal target date" aria-label="Automation end date"/>
+            <select value={goalAutomationPriority} onChange={e=>setGoalAutomationPriority(e.target.value)}><option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+            <select value={goalAutomationDuration} onChange={e=>setGoalAutomationDuration(Number(e.target.value))}><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">1 hour</option><option value="90">90 min</option><option value="120">2 hours</option></select>
+            <button className="primary-small goal-automation-create" onClick={createGoalAutomation} disabled={goalAutomationSaving}><Zap size={15}/>{goalAutomationSaving?"Creating…":"Create automation"}</button>
+          </div>
+          <div className="automation-list goal-automation-list">
+            {goalAutomationRules.map(rule=>{const g=goals.find(x=>String(x.id)===String(rule.goalId));return <div className={`automation-rule ${rule.enabled?"active":"paused"}`} key={rule.id}><div className="automation-rule-icon"><Target size={16}/></div><div className="automation-rule-main"><b>{rule.title}</b><small>{g?.title||"Goal unavailable"} · {({daily:"Every day",weekdays:"Every weekday",weekly:"Every week",monthly:"Every month"}[rule.frequency]||"Scheduled")} · until {rule.endDate||g?.target_date||"goal deadline"}</small></div><span className="automation-status">{rule.enabled?"ACTIVE":"PAUSED"}</span><button className="ghost-small" onClick={()=>toggleGoalAutomation(rule.id)}>{rule.enabled?"Pause":"Resume"}</button><button className="ghost-small danger-ghost" onClick={()=>deleteGoalAutomation(rule.id)}><Trash2 size={14}/></button></div>})}
+            {!goalAutomationRules.length&&<div className="automation-empty"><Zap size={22}/><div><b>No goal automations yet.</b><small>Connect a goal to a repeatable action and TRACKEN will handle the task creation.</small></div></div>}
+          </div>
+        </section>
 
         <section className="goals-list-section">
           <div className="goals-section-head"><div><span className="card-kicker">ACTIVE GOALS</span><h2>Your targets</h2></div><span className="goal-count">{activeGoals.length} active</span></div>
