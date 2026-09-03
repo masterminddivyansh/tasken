@@ -29,6 +29,127 @@ const features = [
   { icon: BarChart3, title: "Analytics", text: "Understand your strongest days, weak spots and long-term improvement." }
 ];
 
+const FAQS = [
+  {
+    question: "What is a study tracker?",
+    answer: "A study tracker is a system for recording study tasks, sessions, progress and consistency so you can see what you actually completed. TRACKEN.in combines study tracking with tasks, goals, habits, focus and review in one personal workspace."
+  },
+  {
+    question: "How to make a study tracker?",
+    answer: "Start by deciding what you need to record, such as tasks, study time, lectures, questions, pages or goals, and then choose a consistent place to review it. Instead of building a spreadsheet from scratch, you can use TRACKEN.in as a purpose-built study tracker website."
+  },
+  {
+    question: "How to use a study tracker",
+    answer: "Add the study work you want to complete, record the sessions or activity you actually do, and review your progress regularly. TRACKEN.in keeps these signals together so your study tracker can become part of a repeatable daily workflow."
+  },
+  {
+    question: "How to create a study tracker in Google Sheets?",
+    answer: "Google Sheets can be used to build a study tracker with rows, dates, formulas and manual updates, but it still requires you to design and maintain the system yourself. If you want a purpose-built study tracker app rather than another spreadsheet, TRACKEN.in brings study, tasks, goals, habits, focus and progress into one workspace."
+  },
+  {
+    question: "What is a finance tracker?",
+    answer: "A finance tracker is a system for recording and reviewing money activity such as income, expenses, budgets, savings, investments and overall financial progress. TRACKEN.in provides a personal finance tracking workspace so these signals can sit alongside the rest of your personal progress system."
+  },
+  {
+    question: "How to create a finance tracker in Google Sheets?",
+    answer: "You can create a finance tracker in Google Sheets with categories, transaction rows, formulas and charts, but maintaining those sheets takes ongoing manual work. TRACKEN.in is designed as a finance tracker app and personal progress system, so you can manage money-related tracking inside the same workspace as your other routines and goals."
+  },
+  {
+    question: "How to create a personal finance tracker in Excel?",
+    answer: "A personal finance tracker in Excel normally starts with transaction categories, dates, amounts, income and expense totals, followed by formulas and charts. If you prefer a ready-made personal finance tracker experience instead of building the workbook yourself, TRACKEN.in provides a dedicated finance workspace within its broader tracking system."
+  },
+  {
+    question: "How to set up a finance tracker on Excel",
+    answer: "Create columns for date, description, category, income and expense, then add formulas for totals and a budget comparison. TRACKEN.in is an alternative when you want a finance tracker app that is already organized around tracking rather than maintaining an Excel template."
+  },
+  {
+    question: "How to use personal management budget tracker",
+    answer: "Use a personal management budget tracker to set spending limits, record money movement and compare actual activity with your plan. TRACKEN.in connects budget and finance tracking with your wider personal tracker so financial decisions can be reviewed alongside goals and routines."
+  },
+  {
+    question: "How to create a personal expense tracker",
+    answer: "Record each expense with a date, category and amount, then review totals by category and over time. TRACKEN.in provides a personal finance tracking workflow so you can keep expense records in the same place as your other personal progress data."
+  },
+  {
+    question: "How to create a habit tracker for personal growth",
+    answer: "Choose a small set of habits that support your goals, define what completion means, record them consistently and review your streaks and patterns. TRACKEN.in includes habit tracking as part of a wider personal progress system instead of treating habits as an isolated checklist."
+  },
+  {
+    question: "What is a habit tracker?",
+    answer: "A habit tracker is a tool for recording whether you completed recurring behaviors over time. TRACKEN.in works as a habit tracker app within a broader system that also includes tasks, study, focus, goals, money and review."
+  },
+  {
+    question: "How to use a habit tracker",
+    answer: "Define the habits you want to maintain, mark completion consistently and use the resulting pattern to decide what to continue or adjust. TRACKEN.in makes habit activity part of your personal tracker so consistency can be viewed with your other progress signals."
+  },
+  {
+    question: "How to make a habit tracker",
+    answer: "A simple habit tracker needs a habit list, a repeatable completion method and a way to review consistency. TRACKEN.in provides a dedicated habit tracking workflow so you do not have to create a separate habit tracker template or journal system from scratch."
+  },
+  {
+    question: "What are the best habit tracker apps?",
+    answer: "The best habit tracker app depends on the workflow you want. TRACKEN.in is built for people who want habit tracking connected with tasks, study, focus, goals, finance and analytics rather than using a habit tracker in isolation."
+  },
+  {
+    question: "Is habit tracker app free?",
+    answer: "TRACKEN.in is built so you can start using its personal tracking workspace without first creating a spreadsheet or template. Check TRACKEN.in for the current availability, features and any pricing information as the service evolves."
+  }
+];
+
+const SEO_HOME_COPY = `TRACKEN is a personal progress OS built for people who want one clear place to track what matters. Instead of separating study, tasks, habits, focus, goals and money across different apps, spreadsheets and notebooks, TRACKEN brings these signals into one connected workspace. The idea is simple: record the work, understand the pattern and keep moving with better context.\n\nFor students, TRACKEN can work as a study tracker app and study tracker website for everyday planning and progress. You can organize study tasks, record study activity, work toward goals, build habits and review your consistency. If you have searched for a study tracker template, a study tracker Google Sheets setup, a Google Sheets study tracker template free option, a study tracker google sheets template free resource, a study tracker Excel workbook, a Notion study tracker template or a study tracker bullet journal, TRACKEN offers a different approach: a dedicated web-based system designed around actual tracking workflows rather than a document you have to design and maintain yourself. It can be useful for students preparing for demanding schedules, including people looking for an MCAT study tracker, while keeping the same core idea of visible, reviewable progress.\n\nTRACKEN also works beyond studying. Its finance tracking tools are designed for people who want a finance tracker, personal finance tracker, finance tracker app or personal finance tracker app inside the same personal system. If you are comparing a best personal finance tracker, focus on whether it fits the way you actually record, review and act on money information. Instead of maintaining a finance tracker Google Sheets or Google Sheets finance tracker manually, you can keep money-related activity alongside your broader goals and routines. If you prefer Excel, a finance tracker template or personal expense tracker can work, but TRACKEN is built to reduce the setup and maintenance involved in creating your own workbook.\n\nThe same principle applies to habits and personal development. TRACKEN can be used as a habit tracker app, personal tracker and personal tracker app for recording recurring routines and seeing consistency over time. People often search for a habit tracker template, habit tracker printable, habit tracker journal, habit tracker ideas or a free habit tracker app. TRACKEN focuses on the digital workflow: define the routine, record completion, build consistency and review the pattern with the rest of your progress. If you are comparing options for a study tracker for parents, TRACKEN is useful as a personal study workspace, but it is not positioned as a dedicated parental monitoring service. Rather than promising to be the single best habit tracker or best finance tracker for everyone, TRACKEN is designed as one connected system for people who want their information to make sense together.\n\nThe goal is not to add another complicated dashboard to your day. TRACKEN is designed around practical use: plan what matters, track what you actually do, review useful signals and improve the next step. Tasks can show what needs attention, study records can show where time went, habits can reveal consistency, focus can make deep work visible, goals can provide direction, and finance tracking can add visibility to everyday money. Together, these areas create a personal tracker that is more useful than a collection of disconnected lists.\n\nTRACKEN is intentionally built for daily use. Whether you are searching for the best personal tracker, a free study tracker app, study tracker apps, a personal finance tracker app, a best free finance tracker app, a best habit tracker app or simply a tracker that can bring several areas together, the product is centered on the same principle: make progress visible without making tracking itself the main job. Visit TRACKEN.in to explore the system, create your personal workspace and decide which parts of your progress you want to keep visible.`;
+
+function setMetaTag(name, content, attribute = "name") {
+  let tag = document.head.querySelector(`meta[${attribute}="${name}"]`);
+  if (!tag) { tag = document.createElement("meta"); tag.setAttribute(attribute, name); document.head.appendChild(tag); }
+  tag.setAttribute("content", content);
+}
+
+function setLinkTag(rel, href) {
+  let tag = document.head.querySelector(`link[rel="${rel}"]`);
+  if (!tag) { tag = document.createElement("link"); tag.rel = rel; document.head.appendChild(tag); }
+  tag.href = href;
+}
+
+const PUBLIC_PATHS = {
+  home: "/",
+  about: "/about/",
+  blog: "/blog/",
+  contact: "/contact/",
+  privacy: "/privacy-policy/",
+  terms: "/terms-and-conditions/",
+  cookies: "/cookie-policy/",
+  disclaimer: "/disclaimer/",
+  advertising: "/advertising/"
+};
+const PATH_TO_PAGE = Object.fromEntries(Object.entries(PUBLIC_PATHS).map(([page, path]) => [path.replace(/\/$/, "") || "/", page]));
+
+function normalizePublicPath(pathname) {
+  if (!pathname || pathname === "/") return "/";
+  return pathname.replace(/\/+$/, "");
+}
+
+function getInitialPublicPage() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const redirected = params.get("__tracken_path");
+    if (redirected) {
+      const clean = normalizePublicPath(redirected);
+      window.history.replaceState({}, "", clean === "/" ? "/" : `${clean}/`);
+      return PATH_TO_PAGE[clean] || "not-found";
+    }
+    const path = normalizePublicPath(window.location.pathname);
+    return PATH_TO_PAGE[path] || "not-found";
+  } catch {
+    return "home";
+  }
+}
+
+function pageUrl(page) {
+  const path = PUBLIC_PATHS[page] || "/";
+  return new URL(path, "https://tracken.in").toString();
+}
+
+
 class TaskenErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -193,7 +314,7 @@ function App() {
   const [theme, setTheme] = useState(() => localStorage.getItem("tasken-theme") || "light");
   const [session, setSession] = useState(null);
   const [authView, setAuthView] = useState(null);
-  const [publicPage, setPublicPage] = useState("home");
+  const [publicPage, setPublicPage] = useState(getInitialPublicPage);
   const [selectedBlogPost, setSelectedBlogPost] = useState(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [recoveryMode, setRecoveryMode] = useState(false);
@@ -202,6 +323,97 @@ function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("tasken-theme", theme);
   }, [theme]);
+
+  const navigatePublicPage = (page) => {
+    setSelectedBlogPost(null);
+    setPublicPage(page);
+    if (page !== "blog-post" && PUBLIC_PATHS[page]) {
+      const nextPath = PUBLIC_PATHS[page];
+      if (window.location.pathname !== nextPath) window.history.pushState({}, "", nextPath);
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    const onPopState = () => {
+      const path = normalizePublicPath(window.location.pathname);
+      setSelectedBlogPost(null);
+      setPublicPage(PATH_TO_PAGE[path] || "not-found");
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    const gaId = "G-V0EP1JS8HP";
+    if (!gaId || window.__trackenAnalyticsLoaded) return;
+    window.__trackenAnalyticsLoaded = true;
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gaId)}`;
+    document.head.appendChild(script);
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function(){ window.dataLayer.push(arguments); };
+    window.gtag("js", new Date());
+    window.gtag("config", gaId, { anonymize_ip: true, send_page_view: false });
+  }, []);
+
+  useEffect(() => {
+    const publicPageMeta = {
+      home: { title: "TRACKEN — Personal Tracker, Study Tracker & Finance Tracker", description: "TRACKEN is a personal progress OS and tracker for study, tasks, habits, focus, goals and finance. Use TRACKEN.in to keep your progress visible in one workspace." },
+      blog: { title: "TRACKEN Blog — Study, Productivity, Habits & Finance", description: "Read the TRACKEN blog for practical ideas about study tracking, productivity, habits, personal progress and finance tracking." },
+      contact: { title: "Contact TRACKEN — Personal Progress OS", description: "Contact TRACKEN.in with questions, feedback or ideas about the personal progress, study, habit and finance tracking platform." },
+      about: { title: "About TRACKEN — Personal Progress OS", description: "Learn about TRACKEN, a personal progress system for study, tasks, habits, goals, focus and finance tracking." },
+      privacy: { title: "Privacy Policy — TRACKEN", description: "Read the TRACKEN privacy policy and learn how account, tracking and service information is handled." },
+      terms: { title: "Terms & Conditions — TRACKEN", description: "Read the terms and conditions for using TRACKEN's personal progress and tracking features." },
+      cookies: { title: "Cookie Policy — TRACKEN", description: "Read the TRACKEN cookie policy and learn about browser storage, authentication, analytics and advertising technologies." },
+      disclaimer: { title: "Disclaimer — TRACKEN", description: "Read the TRACKEN disclaimer covering study tracking, productivity tools, finance tracking and third-party services." },
+      advertising: { title: "Advertising & AdSense — TRACKEN", description: "Learn how TRACKEN approaches advertising, disclosures and the use of advertising partners such as Google AdSense." }
+    };
+    if (publicPage === "not-found") {
+      document.title = "Page Not Found — TRACKEN";
+      setMetaTag("description", "The TRACKEN page you requested could not be found.");
+      setMetaTag("robots", "noindex, follow");
+      setLinkTag("canonical", "https://tracken.in/");
+      return;
+    }
+    const host = window.location.hostname;
+    const isPagesDev = host && host !== "tracken.in" && host.endsWith(".pages.dev");
+    if (isPagesDev || session || authView || recoveryMode) {
+      setMetaTag("robots", "noindex, nofollow");
+      if (isPagesDev) setLinkTag("canonical", "https://tracken.in/");
+      return;
+    }
+    const blogPostMeta = publicPage === "blog-post" && selectedBlogPost ? {
+      title: `${selectedBlogPost.title || "Blog entry"} — TRACKEN Blog`,
+      description: selectedBlogPost.excerpt || "Practical ideas about study tracking, productivity, habits, personal progress and finance tracking from TRACKEN."
+    } : null;
+    const meta = blogPostMeta || publicPageMeta[publicPage] || publicPageMeta.home;
+    const url = pageUrl(publicPage === "blog-post" ? "blog" : publicPage);
+    document.title = meta.title;
+    setMetaTag("description", meta.description);
+    setMetaTag("robots", "index, follow");
+    setMetaTag("og:title", meta.title, "property");
+    setMetaTag("og:description", meta.description, "property");
+    setMetaTag("og:type", publicPage === "blog" ? "website" : "website", "property");
+    setMetaTag("og:url", url, "property");
+    setMetaTag("og:site_name", "TRACKEN", "property");
+    setMetaTag("twitter:card", "summary_large_image");
+    setMetaTag("twitter:title", meta.title);
+    setMetaTag("twitter:description", meta.description);
+    setMetaTag("theme-color", theme === "dark" ? "#0b0c10" : "#f7f8fc");
+    setLinkTag("canonical", url);
+  }, [publicPage, selectedBlogPost, session, authView, recoveryMode, theme]);
+
+  useEffect(() => {
+    const gaId = "G-V0EP1JS8HP";
+    if (!gaId || typeof window.gtag !== "function" || session || authView || recoveryMode) return;
+    window.gtag("event", "page_view", {
+      page_title: document.title,
+      page_location: window.location.href,
+      page_path: window.location.pathname
+    });
+  }, [publicPage, selectedBlogPost, session, authView, recoveryMode]);
 
   useEffect(() => {
     let active = true;
@@ -246,7 +458,7 @@ function App() {
   if (session) {
     return (
       <TaskenErrorBoundary>
-        <Dashboard session={session} theme={theme} toggleTheme={toggleTheme} onLogout={() => setPublicPage("home")} />
+        <Dashboard session={session} theme={theme} toggleTheme={toggleTheme} onLogout={() => navigatePublicPage("home")} />
       </TaskenErrorBoundary>
     );
   }
@@ -265,16 +477,20 @@ function App() {
     );
   }
 
+  if (publicPage === "not-found") {
+    return <TaskenErrorBoundary><NotFoundPage theme={theme} toggleTheme={toggleTheme} onNavigate={navigatePublicPage} /></TaskenErrorBoundary>;
+  }
+
   if (publicPage === "blog-post" && selectedBlogPost) {
-    return <TaskenErrorBoundary><BlogPostPage post={selectedBlogPost} theme={theme} toggleTheme={toggleTheme} onBack={() => { setSelectedBlogPost(null); setPublicPage("blog"); }} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => setPublicPage("contact")} onNavigate={setPublicPage} /></TaskenErrorBoundary>;
+    return <TaskenErrorBoundary><BlogPostPage post={selectedBlogPost} theme={theme} toggleTheme={toggleTheme} onBack={() => { setSelectedBlogPost(null); setPublicPage("blog"); }} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => navigatePublicPage("contact")} onNavigate={navigatePublicPage} /></TaskenErrorBoundary>;
   }
 
   if (publicPage === "blog") {
-    return <TaskenErrorBoundary><BlogPage theme={theme} toggleTheme={toggleTheme} onBack={() => setPublicPage("home")} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => setPublicPage("contact")} onNavigate={setPublicPage} onOpenPost={(post) => { setSelectedBlogPost(post); setPublicPage("blog-post"); }} /></TaskenErrorBoundary>;
+    return <TaskenErrorBoundary><BlogPage theme={theme} toggleTheme={toggleTheme} onBack={() => navigatePublicPage("home")} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => navigatePublicPage("contact")} onNavigate={navigatePublicPage} onOpenPost={(post) => { setSelectedBlogPost(post); setPublicPage("blog-post"); }} /></TaskenErrorBoundary>;
   }
 
   if (["about", "privacy", "terms", "cookies", "disclaimer", "advertising"].includes(publicPage)) {
-    return <TaskenErrorBoundary><LegalPage page={publicPage} theme={theme} toggleTheme={toggleTheme} onBack={() => setPublicPage("home")} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => setPublicPage("contact")} onNavigate={setPublicPage} /></TaskenErrorBoundary>;
+    return <TaskenErrorBoundary><LegalPage page={publicPage} theme={theme} toggleTheme={toggleTheme} onBack={() => navigatePublicPage("home")} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => navigatePublicPage("contact")} onNavigate={navigatePublicPage} /></TaskenErrorBoundary>;
   }
 
   if (publicPage === "contact") {
@@ -283,12 +499,12 @@ function App() {
         <ContactPage
           theme={theme}
           toggleTheme={toggleTheme}
-          onBack={() => setPublicPage("home")}
+          onBack={() => navigatePublicPage("home")}
           onLogin={() => setAuthView("login")}
           onRegister={() => setAuthView("register")}
-          onBlog={() => setPublicPage("blog")}
-          onContact={() => setPublicPage("contact")}
-          onNavigate={setPublicPage}
+          onBlog={() => navigatePublicPage("blog")}
+          onContact={() => navigatePublicPage("contact")}
+          onNavigate={navigatePublicPage}
         />
       </TaskenErrorBoundary>
     );
@@ -301,14 +517,30 @@ function App() {
         toggleTheme={toggleTheme}
         onLogin={() => setAuthView("login")}
         onRegister={() => setAuthView("register")}
-        onBlog={() => setPublicPage("blog")}
-        onContact={() => setPublicPage("contact")}
-        onNavigate={setPublicPage}
+        onBlog={() => navigatePublicPage("blog")}
+        onContact={() => navigatePublicPage("contact")}
+        onNavigate={navigatePublicPage}
       />
     </TaskenErrorBoundary>
   );
 }
 
+
+
+function NotFoundPage({ theme, toggleTheme, onNavigate }) {
+  return (
+    <div className="seo-error-page">
+      <PublicHeader theme={theme} toggleTheme={toggleTheme} onLogin={() => {}} onRegister={() => {}} onBlog={() => onNavigate("blog")} onContact={() => onNavigate("contact")} onNavigate={onNavigate} />
+      <main className="seo-error-main">
+        <span className="card-kicker">TRACKEN · 404</span>
+        <div className="seo-error-code">404</div>
+        <h1>That page isn't part of the system.</h1>
+        <p>The page may have moved, or the address may be incorrect. Head back to TRACKEN and keep moving.</p>
+        <button className="landing-primary" onClick={() => onNavigate("home")}>Back to TRACKEN <ArrowRight size={17}/></button>
+      </main>
+    </div>
+  );
+}
 
 function LandingHome({ theme, toggleTheme, onLogin, onRegister, onBlog, onContact, onNavigate }) {
   const [activeDemo, setActiveDemo] = useState("Overview");
@@ -480,6 +712,22 @@ function LandingHome({ theme, toggleTheme, onLogin, onRegister, onBlog, onContac
         <section className="home-how home-reveal" id="how-it-works"><div className="home-section-heading home-section-heading-v4"><div><div className="landing-section-kicker">HOW TRACKEN WORKS</div><h2>Plan → Track →<br/><em>Improve.</em></h2></div><p>Three steps. One loop. TRACKEN stays useful because the system moves with you instead of becoming another thing to manage.</p></div><div className="home-how-grid home-how-grid-v4">{[["01","PLAN","Add your tasks, lectures and goals.",ClipboardCheck],["02","TRACK","Complete the work, record sessions and build routines.",TrendingUp],["03","IMPROVE","Review the signals and decide what comes next.",Sparkles]].map(([n,t,x,Icon])=><article key={n}><span>{n}</span><div><Icon size={22}/></div><h3>{t}</h3><p>{x}</p><b>{n==="01"?"Give effort a direction":n==="02"?"Make the work visible":"Turn visibility into momentum"}</b></article>)}</div></section>
 
         <section className="home-trust home-reveal"><div className="landing-section-kicker">TRUST THE EXPERIENCE</div><h2>See what you are getting.</h2><p>No invented ratings, user counts or productivity claims. Trust comes from the product itself: the depth of the workflows, the clarity of the interface and a personal workspace that continues after you sign in.</p><div className="home-trust-grid home-trust-grid-v4"><span><ShieldCheck size={20}/><b>Personal workspace</b><small>TRACKEN is built around an account-based workspace for your own tracking system.</small></span><span><LayoutDashboard size={20}/><b>Connected system</b><small>Tasks, study, goals, habits, focus, money and review live inside one product.</small></span><span><LockKeyhole size={20}/><b>Designed for real use</b><small>Less decorative noise. More controls, records, progress and useful context.</small></span></div></section>
+
+        <section className="home-seo-content home-reveal" id="about-tracken">
+          <div className="landing-section-kicker">ABOUT THE TRACKER</div>
+          <div className="home-seo-heading"><h2>A tracker for study, habits, goals, focus and money.</h2><p>TRACKEN brings everyday progress into one connected workspace instead of making you manage separate sheets, templates and apps.</p></div>
+          <div className="home-seo-copy">
+            {SEO_HOME_COPY.split(/\n\n/).map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+          </div>
+        </section>
+
+        <section className="home-faq home-reveal" id="faq">
+          <div className="home-section-heading home-section-heading-v4"><div><div className="landing-section-kicker">FREQUENTLY ASKED QUESTIONS</div><h2>Questions about<br/><em>TRACKEN.</em></h2></div><p>Clear answers about study tracking, finance tracking, habit tracking and using TRACKEN.in instead of maintaining separate templates.</p></div>
+          <div className="home-faq-list">
+            {FAQS.map((item, index) => <details key={item.question} className="home-faq-item" open={index === 0}><summary><span>{String(index + 1).padStart(2, "0")}</span><b>{item.question}</b><ChevronDown size={17}/></summary><p>{item.answer}</p></details>)}
+          </div>
+          <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify({"@context":"https://schema.org","@type":"FAQPage","mainEntity":FAQS.map(item=>({"@type":"Question","name":item.question,"acceptedAnswer":{"@type":"Answer","text":item.answer}}))})}} />
+        </section>
 
         <section className="landing-final-cta home-final home-final-v4 home-reveal"><div className="home-final-orb" aria-hidden="true"></div><div className="landing-section-kicker">START WITH ONE THING</div><h2>Your progress<br/><em>deserves to be seen.</em></h2><p>You do not need to organise your whole life on day one. Start with the part you want to make clearer — then build from there.</p><button className="landing-primary home-primary" onClick={onRegister}>Start Tracking <ArrowRight size={18}/></button><small>No complicated setup. Just a clearer place to begin.</small></section>
       </main>

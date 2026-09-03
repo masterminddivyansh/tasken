@@ -6,9 +6,24 @@
 
     <meta name="theme-color" content="#f7f8fc" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="description" content="TRACKEN is a personal progress system for tracking tasks, study, habits, time, goals and everyday momentum." />
+    <meta name="description" content="TRACKEN is a personal progress OS and tracker for study, tasks, habits, focus, goals and finance. Track what matters in one workspace." />
     <meta name="robots" content="index, follow" />
     <meta name="application-name" content="TRACKEN" />
+    <meta name="author" content="TRACKEN" />
+    <meta name="keywords" content="tracker, tracken, study tracker app, study tracker website, free study tracker app, study tracker template, finance tracker, personal finance tracker, finance tracker app, personal tracker, personal tracker app, habit tracker app, best personal tracker, best habit tracker app" />
+
+    <meta property="og:title" content="TRACKEN — Personal Tracker, Study Tracker & Finance Tracker" />
+    <meta property="og:description" content="TRACKEN is a personal progress OS for study, tasks, habits, focus, goals and finance." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://tracken.in/" />
+    <meta property="og:site_name" content="TRACKEN" />
+    <meta property="og:image" content="https://tracken.in/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="TRACKEN — Personal Tracker, Study Tracker & Finance Tracker" />
+    <meta name="twitter:description" content="A personal progress OS for study, tasks, habits, focus, goals and finance." />
+    <meta name="twitter:image" content="https://tracken.in/og-image.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="TRACKEN" />
     <meta name="format-detection" content="telephone=no" />
@@ -21,7 +36,39 @@
     />
 
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <title>TRACKEN — Track What Matters. See Your Progress.</title>
+    <link rel="canonical" href="https://tracken.in/" />
+    <script>
+      (function () {
+        var host = window.location.hostname;
+        if (host && host !== "tracken.in" && host.endsWith(".pages.dev")) {
+          var meta = document.createElement("meta");
+          meta.name = "robots";
+          meta.content = "noindex, nofollow";
+          document.head.appendChild(meta);
+        }
+      })();
+    </script>
+    <title>TRACKEN — Personal Tracker, Study Tracker & Finance Tracker</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "TRACKEN",
+        "url": "https://tracken.in/",
+        "description": "TRACKEN is a personal progress OS for study, tasks, habits, focus, goals and finance."
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "TRACKEN",
+        "url": "https://tracken.in/",
+        "applicationCategory": "ProductivityApplication",
+        "operatingSystem": "Web",
+        "description": "A personal tracker for study, tasks, habits, focus, goals and finance."
+      }
+    </script>
   </head>
 
   <body>
