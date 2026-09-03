@@ -12362,3 +12362,268 @@ button { -webkit-tap-highlight-color: transparent; }
     font-size: 13px !important;
   }
 }
+
+/* =========================================================
+   TRACKEN v3 — MOBILE COMPACT OVERVIEW PREVIEW
+   Replaces the removed heavy hero dashboard with a readable,
+   lightweight product snapshot on phones only.
+   ========================================================= */
+.home-mobile-overview-card {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .landing-v4 .home-hero-v4 .home-hero-stage-v4 {
+    display: flex !important;
+    width: 100% !important;
+    max-width: 620px !important;
+    min-height: 0 !important;
+    margin: 2px auto 0 !important;
+    padding: 0 !important;
+    align-items: stretch !important;
+    justify-content: center !important;
+    overflow: visible !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-product-shell-v4,
+  .landing-v4 .home-hero-v4 .home-depth-glow,
+  .landing-v4 .home-hero-v4 .home-float {
+    display: none !important;
+  }
+
+  .landing-v4 .home-mobile-overview-card {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 18px 16px 15px;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--surface-solid);
+    color: var(--text);
+    box-shadow: 0 18px 48px rgba(35, 28, 85, .09), 0 4px 14px rgba(35, 28, 85, .04);
+    overflow: hidden;
+    text-align: left;
+  }
+
+  .home-mobile-overview-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 13px;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 6px;
+    line-height: 1;
+    font-weight: 850;
+    letter-spacing: .14em;
+  }
+
+  .home-mobile-overview-top b {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--muted);
+    font-size: 6px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .home-mobile-overview-top b i {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #2db47c;
+    box-shadow: 0 0 0 3px rgba(45, 180, 124, .1);
+  }
+
+  .home-mobile-overview-intro {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 2px 14px;
+  }
+
+  .home-mobile-overview-intro small,
+  .home-mobile-momentum small {
+    display: block;
+    color: var(--muted);
+    font-size: 6px;
+    font-weight: 850;
+    letter-spacing: .13em;
+  }
+
+  .home-mobile-overview-intro h3 {
+    margin: 7px 0 0;
+    font-size: clamp(25px, 7vw, 33px);
+    line-height: .91;
+    letter-spacing: -.055em;
+    font-weight: 760;
+  }
+
+  .home-mobile-overview-intro h3 em {
+    color: var(--home-purple);
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: normal;
+    font-weight: 500;
+  }
+
+  .home-mobile-score {
+    flex: 0 0 62px;
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    border: 5px solid var(--home-purple);
+    background: var(--surface-solid);
+    box-shadow: 0 0 0 1px var(--accent-soft);
+  }
+
+  .home-mobile-score strong {
+    font-size: 20px;
+    line-height: .9;
+    letter-spacing: -.05em;
+  }
+
+  .home-mobile-score span {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 5px;
+  }
+
+  .home-mobile-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .home-mobile-metrics article {
+    min-width: 0;
+    min-height: 58px;
+    padding: 9px 8px 8px;
+    box-sizing: border-box;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--surface-solid) 92%, var(--bg));
+  }
+
+  .home-mobile-metrics span,
+  .home-mobile-metrics small {
+    display: block;
+    color: var(--muted);
+    font-size: 5.5px;
+    line-height: 1.1;
+  }
+
+  .home-mobile-metrics strong {
+    display: block;
+    margin: 6px 0 3px;
+    font-size: clamp(11px, 3.2vw, 15px);
+    line-height: 1;
+    letter-spacing: -.035em;
+    white-space: nowrap;
+  }
+
+  .home-mobile-momentum {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 116px;
+    align-items: end;
+    gap: 14px;
+    margin-top: 9px;
+    padding: 13px 2px 1px;
+    border-top: 1px solid var(--line);
+  }
+
+  .home-mobile-momentum strong {
+    display: block;
+    margin: 7px 0 8px;
+    font-size: 9px;
+    line-height: 1.2;
+    letter-spacing: -.01em;
+  }
+
+  .home-mobile-progress {
+    height: 4px;
+    overflow: hidden;
+    border-radius: 99px;
+    background: var(--accent-soft);
+  }
+
+  .home-mobile-progress i {
+    display: block;
+    width: 72%;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--home-purple);
+  }
+
+  .home-mobile-momentum > div:first-child > span {
+    display: block;
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 5px;
+  }
+
+  .home-mobile-bars {
+    height: 52px;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    align-items: end;
+    gap: 4px;
+  }
+
+  .home-mobile-bars i {
+    display: block;
+    min-height: 7px;
+    border-radius: 4px 4px 2px 2px;
+    background: linear-gradient(180deg, var(--home-purple), color-mix(in srgb, var(--home-purple) 48%, var(--accent-soft)));
+    transform-origin: bottom;
+    animation: homeBars .75s cubic-bezier(.2,.8,.2,1) both;
+  }
+}
+
+@media (max-width: 420px) {
+  .landing-v4 .home-mobile-overview-card {
+    padding: 16px 13px 13px;
+    border-radius: 16px;
+  }
+
+  .home-mobile-overview-intro {
+    padding-top: 14px;
+  }
+
+  .home-mobile-score {
+    flex-basis: 58px;
+    width: 58px;
+    height: 58px;
+    border-width: 4px;
+  }
+
+  .home-mobile-score strong {
+    font-size: 18px;
+  }
+
+  .home-mobile-metrics {
+    gap: 5px;
+  }
+
+  .home-mobile-metrics article {
+    min-height: 55px;
+    padding: 8px 6px 7px;
+  }
+
+  .home-mobile-momentum {
+    grid-template-columns: minmax(0, 1fr) 92px;
+    gap: 9px;
+  }
+
+  .home-mobile-bars {
+    height: 46px;
+    gap: 3px;
+  }
+}

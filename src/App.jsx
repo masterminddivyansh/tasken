@@ -380,6 +380,39 @@ function LandingHome({ theme, toggleTheme, onLogin, onRegister, onBlog, onContac
 
           <div className="home-hero-stage home-hero-stage-v4" ref={heroVisualRef} onMouseMove={handleHeroMove} onMouseLeave={resetHero}>
             <div className="home-depth-glow" aria-hidden="true"></div>
+
+            {/* Compact mobile-only product preview. The full command-center mockup stays on tablet/desktop. */}
+            <div className="home-mobile-overview-card" aria-label="TRACKEN overview preview">
+              <div className="home-mobile-overview-top">
+                <span>TRACKEN / OVERVIEW</span>
+                <b><i></i> LIVE SYSTEM</b>
+              </div>
+              <div className="home-mobile-overview-intro">
+                <div>
+                  <small>TODAY'S OPERATING PICTURE</small>
+                  <h3>Everything<br/><em>in context.</em></h3>
+                </div>
+                <div className="home-mobile-score"><strong>84</strong><span>/100</span></div>
+              </div>
+              <div className="home-mobile-metrics">
+                <article><span>Tasks</span><strong>7 / 9</strong><small>execution</small></article>
+                <article><span>Study</span><strong>3h 42m</strong><small>today</small></article>
+                <article><span>Habits</span><strong>86%</strong><small>consistency</small></article>
+                <article><span>Focus</span><strong>2h 15m</strong><small>deep work</small></article>
+              </div>
+              <div className="home-mobile-momentum">
+                <div>
+                  <small>GOAL MOMENTUM</small>
+                  <strong>Build something that compounds.</strong>
+                  <div className="home-mobile-progress"><i></i></div>
+                  <span>72% progress · 11 tasks connected</span>
+                </div>
+                <div className="home-mobile-bars" aria-hidden="true">
+                  {[38,55,46,72,61,84,68].map((v,i)=><i key={i} style={{height:`${v}%`}}></i>)}
+                </div>
+              </div>
+            </div>
+
             <div className="home-float home-float-a"><CheckCircle2 size={15}/><span>Today's execution</span><strong>7 / 9 done</strong></div>
             <div className="home-float home-float-b"><Target size={15}/><span>Active goal</span><strong>72%</strong></div>
             <div className="home-float home-float-c"><Flame size={15}/><span>Consistency</span><strong>6 day streak</strong></div>
