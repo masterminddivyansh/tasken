@@ -1,0 +1,151 @@
+        theme={theme}
+        toggleTheme={toggleTheme}
+        onLogin={() => setAuthView("login")}
+        onRegister={() => setAuthView("register")}
+        onBlog={() => setPublicPage("blog")}
+        onContact={() => setPublicPage("contact")}
+        onNavigate={setPublicPage}
+      />
+    </TaskenErrorBoundary>
+  );
+}
+
+
+function LandingHome({ theme, toggleTheme, onLogin, onRegister, onBlog, onContact, onNavigate }) {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [activeDemo, setActiveDemo] = useState("Overview");
+  const heroVisualRef = useRef(null);
+  const demo = {
+    Overview: { icon: LayoutDashboard, eyebrow: "OVERVIEW / COMMAND CENTER", title: "See your whole day without opening five apps.", text: "TRACKEN connects execution, learning, routines, focus and progress into one operating picture.", stat: "84", label: "today's progress", progress: 84 },
+    Tasks: { icon: ListChecks, eyebrow: "TASKS / EXECUTION", title: "Know what needs your attention next.", text: "Capture tasks, set priority and due dates, complete the work and keep the queue visible.", stat: "7 / 9", label: "tasks complete", progress: 78 },
+    Study: { icon: BookOpen, eyebrow: "STUDY / LEARNING", title: "Turn study time into a record of progress.", text: "Track lectures, minutes, questions and pages so effort becomes evidence you can review.", stat: "3h 42m", label: "study recorded", progress: 68 },
+    Goals: { icon: Target, eyebrow: "GOALS / DIRECTION", title: "Connect today's work to something bigger.", text: "Create measurable targets, monitor progress and connect everyday actions to longer-term goals.", stat: "72%", label: "goal progress", progress: 72 },
+    Habits: { icon: Flame, eyebrow: "HABITS / CONSISTENCY", title: "Make consistency visible.", text: "Keep routines in one place, mark completion and see the pattern instead of relying on memory.", stat: "6 days", label: "current streak", progress: 76 },
+    Focus: { icon: Timer, eyebrow: "FOCUS / TIME", title: "Protect the time that actually moves things forward.", text: "Record focused sessions and understand where your working time is going.", stat: "2h 15m", label: "deep work", progress: 64 },
+    Money: { icon: WalletCards, eyebrow: "MONEY / VISIBILITY", title: "Bring everyday money into the same picture.", text: "Track cashflow, budgets, savings goals, investments and net worth without leaving your personal system.", stat: "₹24.8k", label: "available", progress: 71 }
+  };
+  const active = demo[activeDemo];
+  const ActiveIcon = active.icon;
+  const featureRows = [
+    ["Tasks", "Priority queue · due dates · completion", ListChecks],
+    ["Study", "Lectures · time · questions · pages", BookOpen],
+    ["Goals", "Targets · progress · linked work", Target],
+    ["Habits", "Routines · schedules · consistency", Flame],
+    ["Focus", "Sessions · duration · time tracking", Timer],
+    ["Money", "Cashflow · budget · investments · net worth", WalletCards],
+    ["Review", "Analytics · patterns · weekly review", BarChart3]
+  ];
+
+  useEffect(() => {
+    const nodes = document.querySelectorAll(".home-reveal");
+    if (!("IntersectionObserver" in window)) { nodes.forEach(n => n.classList.add("is-visible")); return; }
+    const observer = new IntersectionObserver(entries => entries.forEach(entry => entry.isIntersecting && entry.target.classList.add("is-visible")), { threshold: .08 });
+    nodes.forEach(node => observer.observe(node));
+    return () => observer.disconnect();
+  }, []);
+
+  const handleHeroMove = (event) => {
+    if (!heroVisualRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches || window.innerWidth < 900) return;
+    const rect = heroVisualRef.current.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width - .5;
+    const y = (event.clientY - rect.top) / rect.height - .5;
+    heroVisualRef.current.style.setProperty("--rx", `${(-y * 3.5).toFixed(2)}deg`);
+    heroVisualRef.current.style.setProperty("--ry", `${(x * 5).toFixed(2)}deg`);
+    heroVisualRef.current.style.setProperty("--mx", `${(x * 12).toFixed(1)}px`);
+    heroVisualRef.current.style.setProperty("--my", `${(y * 10).toFixed(1)}px`);
+  };
+  const resetHero = () => { if (heroVisualRef.current) { heroVisualRef.current.style.setProperty("--rx", "0deg"); heroVisualRef.current.style.setProperty("--ry", "0deg"); heroVisualRef.current.style.setProperty("--mx", "0px"); heroVisualRef.current.style.setProperty("--my", "0px"); } };
+
+  return (
+    <div className="landing-v3 landing-v4">
+      <header className="landing-nav landing-nav-v3 landing-nav-v4">
+        <button className="landing-brand" onClick={() => window.scrollTo({top:0, behavior:"smooth"})} aria-label="TRACKEN home">TRACKEN<span>.</span><small>PERSONAL PROGRESS OS</small></button>
+        <nav className={`landing-nav-links ${mobileNavOpen ? "is-open" : ""}`} aria-label="Primary navigation">
+          <a href="#features" onClick={() => setMobileNavOpen(false)}>Features</a><a href="#how-it-works" onClick={() => setMobileNavOpen(false)}>How It Works</a><button onClick={() => {setMobileNavOpen(false);onNavigate("about")}}>About</button><button onClick={() => {setMobileNavOpen(false);onContact()}}>Contact</button>
+        </nav>
+        <div className="landing-actions landing-actions-v4">
+          <button className="landing-mobile-menu" onClick={() => setMobileNavOpen(v=>!v)} aria-label="Toggle navigation" aria-expanded={mobileNavOpen}>{mobileNavOpen?<X size={19}/>:<Menu size={19}/>}</button>
+          <button className="landing-theme" onClick={toggleTheme} aria-label="Toggle theme">{theme==="light"?<Moon size={17}/>:<Sun size={17}/>}</button>
+          <button className="landing-login" onClick={onLogin}>Login</button>
+          <button className="landing-signup" onClick={onRegister}>Get Started <ArrowRight size={16}/></button>
+        </div>
+      </header>
+
+      <main>
+        <section className="home-hero home-hero-v4">
+          <div className="home-ambient" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div className="home-hero-copy">
+            <div className="landing-eyebrow"><span></span> ONE SYSTEM. EVERY KIND OF PROGRESS.</div>
+            <h1>Track what matters.<br/><em>See yourself moving.</em></h1>
+            <p>TRACKEN is a personal progress OS for tasks, study, goals, habits, focus, money and the patterns connecting them — all in one clear workspace.</p>
+            <div className="landing-hero-actions"><button className="landing-primary home-primary" onClick={onRegister}>Start Tracking <ArrowRight size={18}/></button><a className="landing-secondary" href="#product">Explore TRACKEN <ChevronRight size={17}/></a></div>
+            <div className="home-trust-line"><span><CheckCircle2 size={15}/> Real product workflows</span><span><ShieldCheck size={15}/> Personal account workspace</span><span><Zap size={15}/> Built for daily use</span></div>
+            <div className="home-hero-microcopy"><b>Plan.</b><span>Track.</span><span>Review.</span><span>Keep moving.</span></div>
+          </div>
+
+          <div className="home-hero-stage home-hero-stage-v4" ref={heroVisualRef} onMouseMove={handleHeroMove} onMouseLeave={resetHero}>
+            <div className="home-depth-glow" aria-hidden="true"></div>
+            <div className="home-float home-float-a"><CheckCircle2 size={15}/><span>Today's execution</span><strong>7 / 9 done</strong></div>
+            <div className="home-float home-float-b"><Target size={15}/><span>Active goal</span><strong>72%</strong></div>
+            <div className="home-float home-float-c"><Flame size={15}/><span>Consistency</span><strong>6 day streak</strong></div>
+            <div className="home-product-shell home-product-shell-v4">
+              <div className="home-product-bar"><div><i></i><i></i><i></i></div><span>TRACKEN · COMMAND CENTER</span><small><b></b> PERSONAL PROGRESS OS</small></div>
+              <div className="home-product-body home-product-body-v4">
+                <aside className="home-product-sidebar-v4">
+                  <div className="home-mini-brand">T<span>.</span></div>
+                  {[LayoutDashboard,ListChecks,BookOpen,Target,Flame,Timer,WalletCards,BarChart3].map((Icon,i)=><div key={i} className={i===0?"active":""}><Icon size={14}/><span>{["Overview","Tasks","Study","Goals","Habits","Focus","Money","Analytics"][i]}</span></div>)}
+                </aside>
+                <div className="home-product-main home-product-main-v4">
+                  <div className="home-product-heading"><div><small>MONDAY · YOUR OPERATING PICTURE</small><h3>Everything important, in context.</h3><p>See today's execution and the bigger direction together.</p></div><div className="home-avatar">T</div></div>
+                  <div className="home-command-metrics">
+                    <article className="featured"><span>DAILY PROGRESS</span><strong>84</strong><small>/100 · moving well today</small><div className="metric-line"><i style={{width:"84%"}}></i></div></article>
+                    <article><span>TASKS</span><strong>7 / 9</strong><small>2 remaining</small><div className="metric-line"><i style={{width:"78%"}}></i></div></article>
+                    <article><span>STUDY</span><strong>3h 42m</strong><small>4 sessions</small><div className="metric-line"><i style={{width:"68%"}}></i></div></article>
+                    <article><span>FOCUS</span><strong>2h 15m</strong><small>deep work</small><div className="metric-line"><i style={{width:"64%"}}></i></div></article>
+                  </div>
+                  <div className="home-dashboard-rich-grid">
+                    <article className="rich-panel task-queue"><div className="rich-panel-head"><span>SMART QUEUE</span><b>5 active</b></div>{["Finish priority task","Review lecture notes","20 reasoning questions","Plan tomorrow"].map((x,i)=><div className="rich-task" key={x}><i className={i<2?"done":""}>{i<2?"✓":""}</i><span>{x}<small>{["Today · Priority","Today · Study","Today · Practice","Tomorrow · Plan"][i]}</small></span><b>{i<2?"DONE":i===2?"NEXT":"PLAN"}</b></div>)}</article>
+                    <article className="rich-panel progress-panel"><div className="rich-panel-head"><span>PROGRESS MAP</span><BarChart3 size={13}/></div><div className="rich-ring"><div><strong>78%</strong><small>this week</small></div></div><div className="mini-bars">{[38,55,47,72,61,86,68].map((v,i)=><i key={i} style={{height:`${v}%`}}></i>)}</div></article>
+                    <article className="rich-panel goal-panel"><div className="rich-panel-head"><span>GOAL MOMENTUM</span><Target size={13}/></div><strong>Build consistent momentum</strong><div className="metric-line"><i style={{width:"72%"}}></i></div><small>72% · connected to today's work</small><div className="goal-tags"><span>3 tasks</span><span>7 days</span></div></article>
+                    <article className="rich-panel finance-panel"><div className="rich-panel-head"><span>MONEY SNAPSHOT</span><WalletCards size={13}/></div><strong>₹24,800</strong><small>available after planned commitments</small><div className="finance-row"><span>Budget</span><b>68%</b></div><div className="finance-row"><span>Savings goal</span><b>54%</b></div></article>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <a href="#value" className="home-scroll-cue" aria-label="Scroll to learn more"><span>SEE WHY IT MATTERS</span><i></i></a>
+        </section>
+
+        <section className="home-value home-reveal" id="value">
+          <div className="landing-section-kicker">WHY TRACKEN</div>
+          <div className="home-value-grid home-value-grid-v4"><div><h2>Your effort is happening everywhere.<br/><em>Your progress shouldn't be.</em></h2><p className="home-lead">Tasks get finished. Lectures get studied. Habits get repeated. Goals move forward. Focus gets spent. Money moves.</p></div><div><p>When those pieces live in separate places, you can be busy without knowing whether you are actually moving forward.</p><strong>TRACKEN brings the important signals into one operating picture — so the next action and the bigger direction can sit together.</strong><button className="home-text-cta" onClick={onRegister}>Start Tracking <ArrowRight size={16}/></button></div></div>
+          <div className="home-system-strip"><span>PLAN <b>Tasks · Goals</b></span><span>BUILD <b>Study · Habits</b></span><span>FOCUS <b>Sessions · Time</b></span><span>MANAGE <b>Budget · Investments</b></span><span>REVIEW <b>Analytics · Weekly Review</b></span></div>
+        </section>
+
+        <section className="home-product-section home-reveal" id="product">
+          <div className="home-section-heading home-section-heading-v4"><div><div className="landing-section-kicker">THE PRODUCT</div><h2>Not a concept.<br/><em>A system you can use.</em></h2></div><p>The homepage should not make you imagine the product. This is the product logic: real workflows, real screens and a connected view of what you are doing.</p></div>
+          <div className="home-product-showcase-v4">
+            <div className="showcase-topbar"><span>TRACKEN / OVERVIEW</span><div><i></i><i></i><i></i></div><b>LIVE PRODUCT PREVIEW</b></div>
+            <div className="showcase-body">
+              <aside><div className="showcase-brand">TRACKEN<span>.</span><small>PERSONAL PROGRESS OS</small></div>{featureRows.map(([name,sub,Icon])=><button key={name} className={activeDemo===name||((activeDemo==="Money"&&name==="Money"))?"active":""} onClick={()=>setActiveDemo(name)}><Icon size={14}/><span>{name}<small>{sub.split(" · ")[0]}</small></span></button>)}</aside>
+              <div className="showcase-content">
+                <div className="showcase-head"><div><span>{active.eyebrow}</span><h3>{active.title}</h3><p>{active.text}</p></div><div className="showcase-score"><strong>{active.stat}</strong><small>{active.label}</small></div></div>
+                <div className="showcase-grid">
+                  <div className="showcase-card showcase-card-large"><div className="showcase-card-head"><span>ACTIVITY / TODAY</span><b>Live preview</b></div><div className="showcase-activity"><div><strong>7</strong><span>tasks done</span></div><div><strong>3h 42m</strong><span>study</span></div><div><strong>2h 15m</strong><span>focus</span></div><div><strong>6</strong><span>day streak</span></div></div><div className="showcase-chart">{[24,46,38,68,54,82,61,90,72,84,63,76].map((v,i)=><i key={i} style={{height:`${v}%`}}></i>)}</div></div>
+                  <div className="showcase-card"><div className="showcase-card-head"><span>NEXT BEST ACTION</span><Zap size={14}/></div><strong className="showcase-action">Finish priority task</strong><p>One useful move is better than another crowded list.</p><button onClick={onRegister}>Open TRACKEN <ArrowRight size={14}/></button></div>
+                  <div className="showcase-card"><div className="showcase-card-head"><span>GOAL / MOMENTUM</span><Target size={14}/></div><strong>Build consistent momentum</strong><div className="showcase-progress"><i style={{width:`${active.progress}%`}}></i></div><div className="showcase-meta"><span>{active.progress}% progress</span><span>Connected work</span></div></div>
+                  <div className="showcase-card"><div className="showcase-card-head"><span>REVIEW SIGNAL</span><BarChart3 size={14}/></div><strong>Patterns become easier to see.</strong><p>Analytics and weekly review turn recorded activity into a clearer next step.</p></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="home-demo home-reveal" id="features">
+          <div className="home-section-heading home-section-heading-v4"><div><div className="landing-section-kicker">EXPLORE THE SYSTEM</div><h2>One workspace.<br/><em>Many useful signals.</em></h2></div><p>Switch between the parts of TRACKEN that matter to you. The point is not more screens — it is a clearer relationship between them.</p></div>
+          <div className="home-demo-tabs home-demo-tabs-v4" role="tablist">{Object.keys(demo).map(name=>{const Icon=demo[name].icon; return <button key={name} role="tab" aria-selected={activeDemo===name} className={activeDemo===name?"active":""} onClick={()=>setActiveDemo(name)}><Icon size={14}/>{name}</button>})}</div>
+          <div className="home-demo-panel home-demo-panel-v4" key={activeDemo}><div className="home-demo-copy"><div className="landing-section-kicker">{active.eyebrow}</div><ActiveIcon size={28}/><h3>{active.title}</h3><p>{active.text}</p><button className="landing-primary" onClick={onRegister}>Start Tracking <ArrowRight size={17}/></button></div><div className="home-demo-visual home-demo-visual-v4"><div className="demo-window-head"><span>TRACKEN / {activeDemo.toUpperCase()}</span><small>INTERACTIVE PREVIEW</small></div><div className="demo-command-row"><div className="demo-big-number"><span>{active.label}</span><strong>{active.stat}</strong></div><div className="demo-ring-small" style={{"--progress":`${active.progress}%`}}><span>{active.progress}%</span></div></div><div className="demo-detail-grid"><div><span>Today</span><b>Visible</b><small>Record the work you actually did.</small></div><div><span>Next</span><b>Actionable</b><small>Know what deserves attention next.</small></div><div><span>Review</span><b>Connected</b><small>See how activity adds up over time.</small></div></div></div></div>
+        </section>
+
+        <section className="home-progress home-reveal home-progress-v4"><div><div className="landing-section-kicker">VISIBLE PROGRESS</div><h2>When effort is recorded,<br/><em>progress gets a shape.</em></h2><p>Illustrative values only — the experience is about making change visible: from the first task completed to a pattern you can review.</p><div className="progress-story"><span><b>01</b> Record</span><span><b>02</b> Complete</span><span><b>03</b> Review</span></div></div><div className="home-progress-visual home-progress-visual-v4"><div className="home-progress-ring"><strong>75%</strong><span>PROGRESS</span></div><div className="home-progress-steps">{[0,25,50,75,100].map(v=><div key={v} className={v<=75?"active":""}><i></i><span>{v}%</span></div>)}</div></div></section>
+

@@ -2,7 +2,7 @@ import { Component, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, ArrowRight, BarChart3, Check, CheckCircle2, ClipboardCheck, Menu,
   Eye, EyeOff, ImagePlus, UploadCloud, Moon, Save, Sun, Target, UserRound, X, Zap,
-  CalendarDays, Flag, Plus, Trash2, LayoutDashboard, ListChecks, Clock3, BookOpen, Flame, Trophy, TrendingUp, PieChart, Sparkles, ChevronRight, PanelLeftClose, PanelLeftOpen, Award, Timer, HelpCircle, Bell, ShieldCheck, Users, Send, Search, CheckCheck, Megaphone, UserCheck, ChevronDown, Info, PenLine, LockKeyhole, Cookie, Scale, Heart, ClipboardList, LogOut, WalletCards, Receipt, CircleDollarSign, Landmark, BriefcaseBusiness, TrendingDown, Percent, RotateCcw, Medal
+  CalendarDays, Flag, Plus, Trash2, LayoutDashboard, ListChecks, Clock3, BookOpen, Flame, Trophy, TrendingUp, PieChart, Sparkles, ChevronRight, PanelLeftClose, PanelLeftOpen, Award, Timer, HelpCircle, Bell, ShieldCheck, Users, Send, Search, CheckCheck, Megaphone, UserCheck, ChevronDown, Info, PenLine, LockKeyhole, Cookie, Scale, Heart, ClipboardList, LogOut, WalletCards, Receipt, CircleDollarSign, Landmark, BriefcaseBusiness, TrendingDown, Percent, RotateCcw, Medal, FileText, Download
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import FinanceEngine from "./components/FinanceEngine";
@@ -140,7 +140,7 @@ function normalizeArticleHtml(html) {
   doc.querySelectorAll("script,style,iframe,object,embed,form").forEach(el => el.remove());
   doc.querySelectorAll("*").forEach(el => {
     [...el.attributes].forEach(attr => {
-      if (["src", "href", "alt", "title", "target", "rel", "width"].includes(attr.name)) return;
+      if (["src", "href", "alt", "title", "target", "rel", "width", "download"].includes(attr.name)) return;
       if (attr.name === "style" && el.tagName === "IMG") {
         const match = String(attr.value || "").match(/(?:^|;)\s*width\s*:\s*(\d{1,3})%/i);
         if (match) el.setAttribute("style", `width:${Math.min(100, Math.max(10, Number(match[1])))}%;height:auto;`);
@@ -151,15 +151,33 @@ function normalizeArticleHtml(html) {
     });
     if (el.tagName === "A") {
       const href = el.getAttribute("href") || "";
-      if (!/^https?:\/\//i.test(href)) el.removeAttribute("href");
+      const safeHttp = /^https?:\/\//i.test(href);
+      const safeData = /^data:(application\/pdf|application\/zip|application\/octet-stream|application\/vnd\.|text\/plain|image\/)[^,]*;base64,/i.test(href);
+      if (!safeHttp && !safeData) el.removeAttribute("href");
       else { el.setAttribute("target", "_blank"); el.setAttribute("rel", "noreferrer noopener"); }
     }
     if (el.tagName === "IMG") {
       const src = el.getAttribute("src") || "";
-      if (!/^https?:\/\//i.test(src)) el.remove();
+      if (!/^https?:\/\//i.test(src) && !/^data:image\/(png|jpe?g|gif|webp|svg\+xml);base64,/i.test(src)) el.remove();
     }
   });
   return doc.body.innerHTML;
+}
+
+function parseUpdatePayload(message) {
+  try {
+    const parsed = JSON.parse(String(message || ""));
+    if (parsed && parsed.__trackenUpdate === 1) return { html: String(parsed.html || ""), attachment: parsed.attachment || null };
+  } catch {}
+  return { html: normalizeArticleHtml(message || ""), attachment: null };
+}
+
+function formatFileSize(bytes) {
+  const n = Number(bytes || 0);
+  if (!n) return "";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function getTimeGreeting(date = new Date()) {
@@ -292,120 +310,150 @@ function App() {
 
 function LandingHome({ theme, toggleTheme, onLogin, onRegister, onBlog, onContact, onNavigate }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const modules = [
-    { icon: ClipboardCheck, title: "Tasks", text: "Capture priorities, deadlines and the work that needs to happen next." },
-    { icon: BookOpen, title: "Study", text: "Record lectures, questions, pages, sessions and the evidence behind your learning." },
-    { icon: Flame, title: "Habits", text: "Build routines, track streaks and see whether consistency is becoming automatic." },
-    { icon: Timer, title: "Focus & Time", text: "Run deep-work sessions and understand where your hours actually go." },
-    { icon: Target, title: "Goals", text: "Turn ambitions into measurable targets, milestones and connected daily work." },
-    { icon: BriefcaseBusiness, title: "Productivity Engine", text: "Plan capacity, priorities, dependencies and the next best work to execute." },
-    { icon: WalletCards, title: "Money", text: "Track income, expenses, budgets and cash flow without leaving your personal system." },
-    { icon: TrendingUp, title: "Investments", text: "Keep holdings, invested capital and gain or loss visible in one portfolio view." },
-    { icon: Landmark, title: "Net Worth", text: "Bring assets and liabilities together to understand your financial position over time." },
-    { icon: BarChart3, title: "Analytics", text: "Turn your activity into trends, patterns and practical signals you can act on." },
-    { icon: Trophy, title: "Achievements", text: "Make meaningful progress visible through milestones and consistency wins." },
-    { icon: Sparkles, title: "Weekly Review", text: "Look back at what worked, what slipped and the clearest move for next week." }
-  ];
-  const pillars = [
-    ["01", "Track", "Capture the evidence of what you do — work, study, habits, focus and money."],
-    ["02", "Connect", "Let goals, tasks, time and results reinforce each other instead of living in separate apps."],
-    ["03", "Understand", "See patterns in your behavior and progress through a single personal operating picture."],
-    ["04", "Improve", "Use clear signals to decide what deserves attention today, this week and next."],
+  const [activeDemo, setActiveDemo] = useState("Overview");
+  const heroVisualRef = useRef(null);
+  const demo = {
+    Overview: { icon: LayoutDashboard, eyebrow: "OVERVIEW / COMMAND CENTER", title: "See your whole day without opening five apps.", text: "TRACKEN connects execution, learning, routines, focus and progress into one operating picture.", stat: "84", label: "today's progress", progress: 84 },
+    Tasks: { icon: ListChecks, eyebrow: "TASKS / EXECUTION", title: "Know what needs your attention next.", text: "Capture tasks, set priority and due dates, complete the work and keep the queue visible.", stat: "7 / 9", label: "tasks complete", progress: 78 },
+    Study: { icon: BookOpen, eyebrow: "STUDY / LEARNING", title: "Turn study time into a record of progress.", text: "Track lectures, minutes, questions and pages so effort becomes evidence you can review.", stat: "3h 42m", label: "study recorded", progress: 68 },
+    Goals: { icon: Target, eyebrow: "GOALS / DIRECTION", title: "Connect today's work to something bigger.", text: "Create measurable targets, monitor progress and connect everyday actions to longer-term goals.", stat: "72%", label: "goal progress", progress: 72 },
+    Habits: { icon: Flame, eyebrow: "HABITS / CONSISTENCY", title: "Make consistency visible.", text: "Keep routines in one place, mark completion and see the pattern instead of relying on memory.", stat: "6 days", label: "current streak", progress: 76 },
+    Focus: { icon: Timer, eyebrow: "FOCUS / TIME", title: "Protect the time that actually moves things forward.", text: "Record focused sessions and understand where your working time is going.", stat: "2h 15m", label: "deep work", progress: 64 },
+    Money: { icon: WalletCards, eyebrow: "MONEY / VISIBILITY", title: "Bring everyday money into the same picture.", text: "Track cashflow, budgets, savings goals, investments and net worth without leaving your personal system.", stat: "₹24.8k", label: "available", progress: 71 }
+  };
+  const active = demo[activeDemo];
+  const ActiveIcon = active.icon;
+  const featureRows = [
+    ["Tasks", "Priority queue · due dates · completion", ListChecks],
+    ["Study", "Lectures · time · questions · pages", BookOpen],
+    ["Goals", "Targets · progress · linked work", Target],
+    ["Habits", "Routines · schedules · consistency", Flame],
+    ["Focus", "Sessions · duration · time tracking", Timer],
+    ["Money", "Cashflow · budget · investments · net worth", WalletCards],
+    ["Review", "Analytics · patterns · weekly review", BarChart3]
   ];
 
+  useEffect(() => {
+    const nodes = document.querySelectorAll(".home-reveal");
+    if (!("IntersectionObserver" in window)) { nodes.forEach(n => n.classList.add("is-visible")); return; }
+    const observer = new IntersectionObserver(entries => entries.forEach(entry => entry.isIntersecting && entry.target.classList.add("is-visible")), { threshold: .08 });
+    nodes.forEach(node => observer.observe(node));
+    return () => observer.disconnect();
+  }, []);
+
+  const handleHeroMove = (event) => {
+    if (!heroVisualRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches || window.innerWidth < 900) return;
+    const rect = heroVisualRef.current.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width - .5;
+    const y = (event.clientY - rect.top) / rect.height - .5;
+    heroVisualRef.current.style.setProperty("--rx", `${(-y * 3.5).toFixed(2)}deg`);
+    heroVisualRef.current.style.setProperty("--ry", `${(x * 5).toFixed(2)}deg`);
+    heroVisualRef.current.style.setProperty("--mx", `${(x * 12).toFixed(1)}px`);
+    heroVisualRef.current.style.setProperty("--my", `${(y * 10).toFixed(1)}px`);
+  };
+  const resetHero = () => { if (heroVisualRef.current) { heroVisualRef.current.style.setProperty("--rx", "0deg"); heroVisualRef.current.style.setProperty("--ry", "0deg"); heroVisualRef.current.style.setProperty("--mx", "0px"); heroVisualRef.current.style.setProperty("--my", "0px"); } };
+
   return (
-    <div className="landing-v2">
-      <header className="landing-nav">
-        <button className="landing-brand" onClick={() => window.scrollTo({top:0, behavior:"smooth"})} aria-label="TRACKEN home">
-          TRACKEN<span>.</span><small>PERSONAL PROGRESS OS</small>
-        </button>
+    <div className="landing-v3 landing-v4">
+      <header className="landing-nav landing-nav-v3 landing-nav-v4">
+        <button className="landing-brand" onClick={() => window.scrollTo({top:0, behavior:"smooth"})} aria-label="TRACKEN home">TRACKEN<span>.</span><small>PERSONAL PROGRESS OS</small></button>
         <nav className={`landing-nav-links ${mobileNavOpen ? "is-open" : ""}`} aria-label="Primary navigation">
-          <a href="#what-is-tracken" onClick={() => setMobileNavOpen(false)}>What is TRACKEN?</a>
-          <button onClick={() => { setMobileNavOpen(false); onBlog(); }}>Journal</button>
-          <button onClick={() => { setMobileNavOpen(false); onContact(); }}>Get in Touch</button>
+          <a href="#features" onClick={() => setMobileNavOpen(false)}>Features</a><a href="#how-it-works" onClick={() => setMobileNavOpen(false)}>How It Works</a><button onClick={() => {setMobileNavOpen(false);onNavigate("about")}}>About</button><button onClick={() => {setMobileNavOpen(false);onContact()}}>Contact</button>
         </nav>
-        <div className="landing-actions">
-          <button className="landing-mobile-menu" onClick={() => setMobileNavOpen(v => !v)} aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"} aria-expanded={mobileNavOpen}>
-            {mobileNavOpen ? <X size={19} /> : <Menu size={19} />}
-          </button>
-          <button className="landing-theme" onClick={toggleTheme} aria-label="Toggle dark mode" title={theme === "light" ? "Dark mode" : "Light mode"}>
-            {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}
-          </button>
-          <button className="landing-login" onClick={onLogin}>Log in</button>
-          <button className="landing-signup" onClick={onRegister}>Get started <ArrowRight size={16} /></button>
+        <div className="landing-actions landing-actions-v4">
+          <button className="landing-mobile-menu" onClick={() => setMobileNavOpen(v=>!v)} aria-label="Toggle navigation" aria-expanded={mobileNavOpen}>{mobileNavOpen?<X size={19}/>:<Menu size={19}/>}</button>
+          <button className="landing-theme" onClick={toggleTheme} aria-label="Toggle theme">{theme==="light"?<Moon size={17}/>:<Sun size={17}/>}</button>
+          <button className="landing-login" onClick={onLogin}>Login</button>
+          <button className="landing-signup" onClick={onRegister}>Get Started <ArrowRight size={16}/></button>
         </div>
       </header>
 
       <main>
-        <section className="landing-hero-v2">
-          <div className="landing-hero-copy">
+        <section className="home-hero home-hero-v4">
+          <div className="home-ambient" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div className="home-hero-copy">
             <div className="landing-eyebrow"><span></span> ONE SYSTEM. EVERY KIND OF PROGRESS.</div>
-            <h1>Track your life.<br /><em>Understand your progress.</em></h1>
-            <p className="landing-hero-lead">TRACKEN is a personal progress operating system for the things that move your life forward — tasks, study, habits, focus, time, goals, money, investments and the patterns connecting them.</p>
-            <div className="landing-hero-actions">
-              <button className="landing-primary" onClick={onRegister}>Build your TRACKEN <ArrowRight size={18} /></button>
-              <a className="landing-secondary" href="#modules">Explore the system <ChevronRight size={17} /></a>
-            </div>
-            <div className="landing-proof-row">
-              <span><CheckCircle2 size={15} /> One place for your progress</span>
-              <span><CheckCircle2 size={15} /> Built for daily use</span>
-              <span><CheckCircle2 size={15} /> Your data, your system</span>
+            <h1>Track what matters.<br/><em>See yourself moving.</em></h1>
+            <p>TRACKEN is a personal progress OS for tasks, study, goals, habits, focus, money and the patterns connecting them — all in one clear workspace.</p>
+            <div className="landing-hero-actions"><button className="landing-primary home-primary" onClick={onRegister}>Start Tracking <ArrowRight size={18}/></button><a className="landing-secondary" href="#product">Explore TRACKEN <ChevronRight size={17}/></a></div>
+            <div className="home-trust-line"><span><CheckCircle2 size={15}/> Real product workflows</span><span><ShieldCheck size={15}/> Personal account workspace</span><span><Zap size={15}/> Built for daily use</span></div>
+            <div className="home-hero-microcopy"><b>Plan.</b><span>Track.</span><span>Review.</span><span>Keep moving.</span></div>
+          </div>
+
+          <div className="home-hero-stage home-hero-stage-v4" ref={heroVisualRef} onMouseMove={handleHeroMove} onMouseLeave={resetHero}>
+            <div className="home-depth-glow" aria-hidden="true"></div>
+            <div className="home-float home-float-a"><CheckCircle2 size={15}/><span>Today's execution</span><strong>7 / 9 done</strong></div>
+            <div className="home-float home-float-b"><Target size={15}/><span>Active goal</span><strong>72%</strong></div>
+            <div className="home-float home-float-c"><Flame size={15}/><span>Consistency</span><strong>6 day streak</strong></div>
+            <div className="home-product-shell home-product-shell-v4">
+              <div className="home-product-bar"><div><i></i><i></i><i></i></div><span>TRACKEN · COMMAND CENTER</span><small><b></b> PERSONAL PROGRESS OS</small></div>
+              <div className="home-product-body home-product-body-v4">
+                <aside className="home-product-sidebar-v4">
+                  <div className="home-mini-brand">T<span>.</span></div>
+                  {[LayoutDashboard,ListChecks,BookOpen,Target,Flame,Timer,WalletCards,BarChart3].map((Icon,i)=><div key={i} className={i===0?"active":""}><Icon size={14}/><span>{["Overview","Tasks","Study","Goals","Habits","Focus","Money","Analytics"][i]}</span></div>)}
+                </aside>
+                <div className="home-product-main home-product-main-v4">
+                  <div className="home-product-heading"><div><small>MONDAY · YOUR OPERATING PICTURE</small><h3>Everything important, in context.</h3><p>See today's execution and the bigger direction together.</p></div><div className="home-avatar">T</div></div>
+                  <div className="home-command-metrics">
+                    <article className="featured"><span>DAILY PROGRESS</span><strong>84</strong><small>/100 · moving well today</small><div className="metric-line"><i style={{width:"84%"}}></i></div></article>
+                    <article><span>TASKS</span><strong>7 / 9</strong><small>2 remaining</small><div className="metric-line"><i style={{width:"78%"}}></i></div></article>
+                    <article><span>STUDY</span><strong>3h 42m</strong><small>4 sessions</small><div className="metric-line"><i style={{width:"68%"}}></i></div></article>
+                    <article><span>FOCUS</span><strong>2h 15m</strong><small>deep work</small><div className="metric-line"><i style={{width:"64%"}}></i></div></article>
+                  </div>
+                  <div className="home-dashboard-rich-grid">
+                    <article className="rich-panel task-queue"><div className="rich-panel-head"><span>SMART QUEUE</span><b>5 active</b></div>{["Finish priority task","Review lecture notes","20 reasoning questions","Plan tomorrow"].map((x,i)=><div className="rich-task" key={x}><i className={i<2?"done":""}>{i<2?"✓":""}</i><span>{x}<small>{["Today · Priority","Today · Study","Today · Practice","Tomorrow · Plan"][i]}</small></span><b>{i<2?"DONE":i===2?"NEXT":"PLAN"}</b></div>)}</article>
+                    <article className="rich-panel progress-panel"><div className="rich-panel-head"><span>PROGRESS MAP</span><BarChart3 size={13}/></div><div className="rich-ring"><div><strong>78%</strong><small>this week</small></div></div><div className="mini-bars">{[38,55,47,72,61,86,68].map((v,i)=><i key={i} style={{height:`${v}%`}}></i>)}</div></article>
+                    <article className="rich-panel goal-panel"><div className="rich-panel-head"><span>GOAL MOMENTUM</span><Target size={13}/></div><strong>Build consistent momentum</strong><div className="metric-line"><i style={{width:"72%"}}></i></div><small>72% · connected to today's work</small><div className="goal-tags"><span>3 tasks</span><span>7 days</span></div></article>
+                    <article className="rich-panel finance-panel"><div className="rich-panel-head"><span>MONEY SNAPSHOT</span><WalletCards size={13}/></div><strong>₹24,800</strong><small>available after planned commitments</small><div className="finance-row"><span>Budget</span><b>68%</b></div><div className="finance-row"><span>Savings goal</span><b>54%</b></div></article>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          <div className="landing-command-card">
-            <div className="landing-command-glow"></div>
-            <div className="landing-command-top"><span>TRACKEN / OVERVIEW</span><span className="live-dot"><i></i> LIVE SYSTEM</span></div>
-            <div className="landing-command-title"><div><small>TODAY'S OPERATING PICTURE</small><h2>Everything<br /><em>in context.</em></h2></div><div className="landing-score-ring"><strong>84</strong><span>/100</span></div></div>
-            <div className="landing-command-grid">
-              <div><span>Tasks</span><strong>7 / 9</strong><small>execution</small></div>
-              <div><span>Study</span><strong>3h 42m</strong><small>today</small></div>
-              <div><span>Habits</span><strong>86%</strong><small>consistency</small></div>
-              <div><span>Focus</span><strong>2h 15m</strong><small>deep work</small></div>
+          <a href="#value" className="home-scroll-cue" aria-label="Scroll to learn more"><span>SEE WHY IT MATTERS</span><i></i></a>
+        </section>
+
+        <section className="home-value home-reveal" id="value">
+          <div className="landing-section-kicker">WHY TRACKEN</div>
+          <div className="home-value-grid home-value-grid-v4"><div><h2>Your effort is happening everywhere.<br/><em>Your progress shouldn't be.</em></h2><p className="home-lead">Tasks get finished. Lectures get studied. Habits get repeated. Goals move forward. Focus gets spent. Money moves.</p></div><div><p>When those pieces live in separate places, you can be busy without knowing whether you are actually moving forward.</p><strong>TRACKEN brings the important signals into one operating picture — so the next action and the bigger direction can sit together.</strong><button className="home-text-cta" onClick={onRegister}>Start Tracking <ArrowRight size={16}/></button></div></div>
+          <div className="home-system-strip"><span>PLAN <b>Tasks · Goals</b></span><span>BUILD <b>Study · Habits</b></span><span>FOCUS <b>Sessions · Time</b></span><span>MANAGE <b>Budget · Investments</b></span><span>REVIEW <b>Analytics · Weekly Review</b></span></div>
+        </section>
+
+        <section className="home-product-section home-reveal" id="product">
+          <div className="home-section-heading home-section-heading-v4"><div><div className="landing-section-kicker">THE PRODUCT</div><h2>Not a concept.<br/><em>A system you can use.</em></h2></div><p>The homepage should not make you imagine the product. This is the product logic: real workflows, real screens and a connected view of what you are doing.</p></div>
+          <div className="home-product-showcase-v4">
+            <div className="showcase-topbar"><span>TRACKEN / OVERVIEW</span><div><i></i><i></i><i></i></div><b>LIVE PRODUCT PREVIEW</b></div>
+            <div className="showcase-body">
+              <aside><div className="showcase-brand">TRACKEN<span>.</span><small>PERSONAL PROGRESS OS</small></div>{featureRows.map(([name,sub,Icon])=><button key={name} className={activeDemo===name||((activeDemo==="Money"&&name==="Money"))?"active":""} onClick={()=>setActiveDemo(name)}><Icon size={14}/><span>{name}<small>{sub.split(" · ")[0]}</small></span></button>)}</aside>
+              <div className="showcase-content">
+                <div className="showcase-head"><div><span>{active.eyebrow}</span><h3>{active.title}</h3><p>{active.text}</p></div><div className="showcase-score"><strong>{active.stat}</strong><small>{active.label}</small></div></div>
+                <div className="showcase-grid">
+                  <div className="showcase-card showcase-card-large"><div className="showcase-card-head"><span>ACTIVITY / TODAY</span><b>Live preview</b></div><div className="showcase-activity"><div><strong>7</strong><span>tasks done</span></div><div><strong>3h 42m</strong><span>study</span></div><div><strong>2h 15m</strong><span>focus</span></div><div><strong>6</strong><span>day streak</span></div></div><div className="showcase-chart">{[24,46,38,68,54,82,61,90,72,84,63,76].map((v,i)=><i key={i} style={{height:`${v}%`}}></i>)}</div></div>
+                  <div className="showcase-card"><div className="showcase-card-head"><span>NEXT BEST ACTION</span><Zap size={14}/></div><strong className="showcase-action">Finish priority task</strong><p>One useful move is better than another crowded list.</p><button onClick={onRegister}>Open TRACKEN <ArrowRight size={14}/></button></div>
+                  <div className="showcase-card"><div className="showcase-card-head"><span>GOAL / MOMENTUM</span><Target size={14}/></div><strong>Build consistent momentum</strong><div className="showcase-progress"><i style={{width:`${active.progress}%`}}></i></div><div className="showcase-meta"><span>{active.progress}% progress</span><span>Connected work</span></div></div>
+                  <div className="showcase-card"><div className="showcase-card-head"><span>REVIEW SIGNAL</span><BarChart3 size={14}/></div><strong>Patterns become easier to see.</strong><p>Analytics and weekly review turn recorded activity into a clearer next step.</p></div>
+                </div>
+              </div>
             </div>
-            <div className="landing-command-bottom">
-              <div><span>GOAL MOMENTUM</span><strong>Build something that compounds.</strong><div className="landing-line"><i></i></div><small>72% progress · 18 tasks connected</small></div>
-              <div className="landing-mini-bars"><i style={{height:"36%"}}></i><i style={{height:"58%"}}></i><i style={{height:"46%"}}></i><i style={{height:"76%"}}></i><i style={{height:"64%"}}></i><i style={{height:"88%"}}></i><i style={{height:"70%"}}></i></div>
-            </div>
           </div>
         </section>
 
-        <section className="landing-manifesto" id="what-is-tracken">
-          <div className="landing-section-kicker">WHAT IS TRACKEN?</div>
-          <div className="landing-manifesto-grid">
-            <h2>Not another<br /><em>to-do list.</em></h2>
-            <div><p>Most productivity tools help you record isolated pieces of your life. TRACKEN is designed to connect them.</p><p>You can track what you need to do, what you are learning, how consistently you show up, how you spend your time and money, and how all of that contributes to the goals you care about.</p><strong>Track what matters. See the pattern. Make the next move.</strong></div>
-          </div>
+        <section className="home-demo home-reveal" id="features">
+          <div className="home-section-heading home-section-heading-v4"><div><div className="landing-section-kicker">EXPLORE THE SYSTEM</div><h2>One workspace.<br/><em>Many useful signals.</em></h2></div><p>Switch between the parts of TRACKEN that matter to you. The point is not more screens — it is a clearer relationship between them.</p></div>
+          <div className="home-demo-tabs home-demo-tabs-v4" role="tablist">{Object.keys(demo).map(name=>{const Icon=demo[name].icon; return <button key={name} role="tab" aria-selected={activeDemo===name} className={activeDemo===name?"active":""} onClick={()=>setActiveDemo(name)}><Icon size={14}/>{name}</button>})}</div>
+          <div className="home-demo-panel home-demo-panel-v4" key={activeDemo}><div className="home-demo-copy"><div className="landing-section-kicker">{active.eyebrow}</div><ActiveIcon size={28}/><h3>{active.title}</h3><p>{active.text}</p><button className="landing-primary" onClick={onRegister}>Start Tracking <ArrowRight size={17}/></button></div><div className="home-demo-visual home-demo-visual-v4"><div className="demo-window-head"><span>TRACKEN / {activeDemo.toUpperCase()}</span><small>INTERACTIVE PREVIEW</small></div><div className="demo-command-row"><div className="demo-big-number"><span>{active.label}</span><strong>{active.stat}</strong></div><div className="demo-ring-small" style={{"--progress":`${active.progress}%`}}><span>{active.progress}%</span></div></div><div className="demo-detail-grid"><div><span>Today</span><b>Visible</b><small>Record the work you actually did.</small></div><div><span>Next</span><b>Actionable</b><small>Know what deserves attention next.</small></div><div><span>Review</span><b>Connected</b><small>See how activity adds up over time.</small></div></div></div></div>
         </section>
 
-        <section className="landing-pillars" id="how-it-works">
-          {pillars.map(([num, title, text]) => <article key={num}><span>{num}</span><h3>{title}</h3><p>{text}</p></article>)}
-        </section>
+        <section className="home-progress home-reveal home-progress-v4"><div><div className="landing-section-kicker">VISIBLE PROGRESS</div><h2>When effort is recorded,<br/><em>progress gets a shape.</em></h2><p>Illustrative values only — the experience is about making change visible: from the first task completed to a pattern you can review.</p><div className="progress-story"><span><b>01</b> Record</span><span><b>02</b> Complete</span><span><b>03</b> Review</span></div></div><div className="home-progress-visual home-progress-visual-v4"><div className="home-progress-ring"><strong>75%</strong><span>PROGRESS</span></div><div className="home-progress-steps">{[0,25,50,75,100].map(v=><div key={v} className={v<=75?"active":""}><i></i><span>{v}%</span></div>)}</div></div></section>
 
-        <section className="landing-modules" id="modules">
-          <div className="landing-section-head"><div><div className="landing-section-kicker">THE TRACKEN SYSTEM</div><h2>Everything you want<br /><em>to keep visible.</em></h2></div><p>Start with one tracker. Add the others as your system grows. TRACKEN is designed so every module can stand alone while still contributing to one bigger picture.</p></div>
-          <div className="landing-module-grid">
-            {modules.map(({icon: Icon, title, text}, index) => <article className="landing-module-card" key={title}><div className="landing-module-number">{String(index + 1).padStart(2,"0")}</div><div className="landing-module-icon"><Icon size={20}/></div><h3>{title}</h3><p>{text}</p><ChevronRight className="landing-module-arrow" size={18}/></article>)}
-          </div>
-        </section>
+        <section className="home-how home-reveal" id="how-it-works"><div className="home-section-heading home-section-heading-v4"><div><div className="landing-section-kicker">HOW TRACKEN WORKS</div><h2>Plan → Track →<br/><em>Improve.</em></h2></div><p>Three steps. One loop. TRACKEN stays useful because the system moves with you instead of becoming another thing to manage.</p></div><div className="home-how-grid home-how-grid-v4">{[["01","PLAN","Add your tasks, lectures and goals.",ClipboardCheck],["02","TRACK","Complete the work, record sessions and build routines.",TrendingUp],["03","IMPROVE","Review the signals and decide what comes next.",Sparkles]].map(([n,t,x,Icon])=><article key={n}><span>{n}</span><div><Icon size={22}/></div><h3>{t}</h3><p>{x}</p><b>{n==="01"?"Give effort a direction":n==="02"?"Make the work visible":"Turn visibility into momentum"}</b></article>)}</div></section>
 
-        <section className="landing-insight-section">
-          <div className="landing-insight-card"><div><div className="landing-section-kicker">THE DIFFERENCE</div><h2>From tracking<br /><em>to understanding.</em></h2><p>A number is useful. A connected explanation is better. TRACKEN is built toward a system that can tell you what changed, why it matters and what deserves your attention next.</p><button className="landing-primary" onClick={onRegister}>Start tracking <ArrowRight size={17}/></button></div><div className="landing-insight-stack"><div><span>01</span><strong>Your activity</strong><small>Tasks · Study · Habits · Focus</small></div><div><span>02</span><strong>Your progress</strong><small>Goals · Milestones · Time · Results</small></div><div><span>03</span><strong>Your direction</strong><small>Analytics · Reviews · Next actions</small></div></div></div>
-        </section>
+        <section className="home-trust home-reveal"><div className="landing-section-kicker">TRUST THE EXPERIENCE</div><h2>See what you are getting.</h2><p>No invented ratings, user counts or productivity claims. Trust comes from the product itself: the depth of the workflows, the clarity of the interface and a personal workspace that continues after you sign in.</p><div className="home-trust-grid home-trust-grid-v4"><span><ShieldCheck size={20}/><b>Personal workspace</b><small>TRACKEN is built around an account-based workspace for your own tracking system.</small></span><span><LayoutDashboard size={20}/><b>Connected system</b><small>Tasks, study, goals, habits, focus, money and review live inside one product.</small></span><span><LockKeyhole size={20}/><b>Designed for real use</b><small>Less decorative noise. More controls, records, progress and useful context.</small></span></div></section>
 
-        <section className="landing-final-cta">
-          <div className="landing-section-kicker">YOUR PROGRESS, YOUR SYSTEM</div>
-          <h2>Make every day<br /><em>count for something.</em></h2>
-          <p>Build a clearer picture of your work, your routines, your goals and your money — then use it to make better decisions.</p>
-          <div className="landing-hero-actions"><button className="landing-primary" onClick={onRegister}>Create your free system <ArrowRight size={18}/></button><button className="landing-secondary" onClick={onLogin}>I already have an account <ArrowRight size={17}/></button></div>
-        </section>
+        <section className="landing-final-cta home-final home-final-v4 home-reveal"><div className="home-final-orb" aria-hidden="true"></div><div className="landing-section-kicker">START WITH ONE THING</div><h2>Your progress<br/><em>deserves to be seen.</em></h2><p>You do not need to organise your whole life on day one. Start with the part you want to make clearer — then build from there.</p><button className="landing-primary home-primary" onClick={onRegister}>Start Tracking <ArrowRight size={18}/></button><small>No complicated setup. Just a clearer place to begin.</small></section>
       </main>
 
-      <footer className="landing-footer-v2">
-        <div><div className="landing-footer-brand">TRACKEN<span>.</span></div><small>PERSONAL PROGRESS OS</small><p>Track what matters. Understand your patterns. Build momentum every day.</p></div>
-        <div className="landing-footer-links"><button onClick={() => window.scrollTo({top:0, behavior:"smooth"})}>Home</button><a href="#modules">Features</a><button onClick={onBlog}>Journal</button><button onClick={onContact}>Get in Touch</button><button onClick={() => onNavigate("about")}>About</button></div>
-        <div className="landing-footer-policies"><button onClick={() => onNavigate("privacy")}>Privacy</button><button onClick={() => onNavigate("terms")}>Terms</button><button onClick={() => onNavigate("cookies")}>Cookies</button><button onClick={() => onNavigate("disclaimer")}>Disclaimer</button><button onClick={() => onNavigate("advertising")}>Advertising</button></div>
-        <div className="landing-footer-bottom"><span>TRACKEN by MMD</span><span>Made with DeepIntelligence</span></div>
-      </footer>
+      <footer className="landing-footer-v2 landing-footer-v4"><div><div className="landing-footer-brand">TRACKEN<span>.</span></div><small>PERSONAL PROGRESS OS</small><p>Track what matters. Understand your patterns. Keep moving.</p></div><div className="landing-footer-links"><a href="#features">Features</a><button onClick={()=>onNavigate("about")}>About</button><button onClick={onContact}>Contact</button><button onClick={onBlog}>Journal</button></div><div className="landing-footer-policies"><button onClick={()=>onNavigate("privacy")}>Privacy Policy</button><button onClick={()=>onNavigate("terms")}>Terms</button><button onClick={()=>onNavigate("disclaimer")}>Disclaimer</button><button onClick={()=>onNavigate("cookies")}>Cookie Policy</button><button onClick={()=>onNavigate("advertising")}>Advertising</button></div><div className="landing-footer-bottom"><span>TRACKEN by MMD</span><span>Personal Progress OS</span></div></footer>
     </div>
   );
 }
@@ -532,6 +580,8 @@ function BlogPage({theme,toggleTheme,onBack,onLogin,onRegister,onContact,onNavig
   const [activeCategory,setActiveCategory]=useState("All");
   const [galleryOpen,setGalleryOpen]=useState(false);
   const [galleryImages,setGalleryImages]=useState([]);
+  const [galleryIndex,setGalleryIndex]=useState(0);
+  const galleryTouchStart=useRef(0);
 
   useEffect(()=>{
     let mounted=true;
@@ -591,15 +641,124 @@ function BlogPage({theme,toggleTheme,onBack,onLogin,onRegister,onContact,onNavig
 
         <section className="journal-gallery-entry">
           <div><span className="card-kicker">VISUAL JOURNAL</span><h2>Gallery of TRACKEN</h2><p>Moments, product visuals and images shared directly from the TRACKEN studio.</p></div>
-          <button className="primary-cta" onClick={()=>setGalleryOpen(true)}><ImagePlus size={17}/> View Gallery <ArrowRight size={16}/></button>
+          <button className="primary-cta" onClick={()=>{setGalleryIndex(0);setGalleryOpen(true)}}><ImagePlus size={17}/> View Gallery <ArrowRight size={16}/></button>
         </section>
 
-        {galleryOpen && <div className="journal-gallery-overlay" role="dialog" aria-modal="true" aria-label="Gallery of TRACKEN" onClick={()=>setGalleryOpen(false)}>
-          <div className="journal-gallery-modal" onClick={e=>e.stopPropagation()}>
-            <div className="journal-gallery-head"><div><span className="card-kicker">TRACKEN JOURNAL</span><h2>Gallery of TRACKEN</h2><p>{galleryImages.length} {galleryImages.length===1?"image":"images"} published</p></div><button className="icon-button" onClick={()=>setGalleryOpen(false)} aria-label="Close gallery"><X size={20}/></button></div>
-            {galleryImages.length ? <div className="journal-gallery-grid">{galleryImages.map(item=><figure key={item.id}><img src={item.image_url} alt={item.alt_text||item.caption||"TRACKEN gallery"}/>{item.caption&&<figcaption>{item.caption}</figcaption>}</figure>)}</div> : <div className="journal-gallery-empty"><ImagePlus size={28}/><h3>The gallery is ready.</h3><p>Images uploaded from Admin will appear here instantly.</p></div>}
+        {galleryOpen && (
+          <div
+            className="journal-gallery-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Gallery of TRACKEN"
+            onClick={() => setGalleryOpen(false)}
+          >
+            <div className="journal-gallery-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="journal-gallery-head">
+                <div>
+                  <span className="card-kicker">TRACKEN JOURNAL</span>
+                  <h2>Gallery of TRACKEN</h2>
+                  <p>
+                    {galleryImages.length}{" "}
+                    {galleryImages.length === 1 ? "image" : "images"} published
+                  </p>
+                </div>
+                <button
+                  className="icon-button"
+                  onClick={() => setGalleryOpen(false)}
+                  aria-label="Close gallery"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {galleryImages.length > 0 ? (
+                <>
+                  <div
+                    className="journal-gallery-viewer"
+                    onTouchStart={(e) => {
+                      galleryTouchStart.current = e.changedTouches[0].clientX;
+                    }}
+                    onTouchEnd={(e) => {
+                      const dx = e.changedTouches[0].clientX - galleryTouchStart.current;
+                      if (Math.abs(dx) > 45) {
+                        setGalleryIndex((i) =>
+                          dx < 0
+                            ? Math.min(i + 1, galleryImages.length - 1)
+                            : Math.max(i - 1, 0)
+                        );
+                      }
+                    }}
+                  >
+                    <button
+                      className="gallery-nav gallery-prev"
+                      onClick={() => setGalleryIndex((i) => Math.max(i - 1, 0))}
+                      disabled={galleryIndex === 0}
+                      aria-label="Previous image"
+                    >
+                      ‹
+                    </button>
+
+                    <figure>
+                      <img
+                        src={galleryImages[galleryIndex].image_url}
+                        alt={
+                          galleryImages[galleryIndex].alt_text ||
+                          galleryImages[galleryIndex].caption ||
+                          "TRACKEN gallery"
+                        }
+                      />
+                      {galleryImages[galleryIndex].caption && (
+                        <figcaption>{galleryImages[galleryIndex].caption}</figcaption>
+                      )}
+                      <div className="gallery-viewer-meta">
+                        <span>
+                          {galleryIndex + 1} / {galleryImages.length}
+                        </span>
+                        <a
+                          href={galleryImages[galleryIndex].image_url}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                        >
+                          Open full image
+                        </a>
+                      </div>
+                    </figure>
+
+                    <button
+                      className="gallery-nav gallery-next"
+                      onClick={() =>
+                        setGalleryIndex((i) => Math.min(i + 1, galleryImages.length - 1))
+                      }
+                      disabled={galleryIndex === galleryImages.length - 1}
+                      aria-label="Next image"
+                    >
+                      ›
+                    </button>
+                  </div>
+
+                  <div className="gallery-thumbnail-strip">
+                    {galleryImages.map((item, i) => (
+                      <button
+                        key={item.id}
+                        className={i === galleryIndex ? "active" : ""}
+                        onClick={() => setGalleryIndex(i)}
+                        aria-label={`View image ${i + 1}`}
+                      >
+                        <img src={item.image_url} alt="" />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="journal-gallery-empty">
+                  <ImagePlus size={28} />
+                  <h3>The gallery is ready.</h3>
+                  <p>Images uploaded from Admin will appear here instantly.</p>
+                </div>
+              )}
+            </div>
           </div>
-        </div>}
+        )}
 
         {posts.length>0 && <div className="journal-filter-row">{categories.map(c=><button key={c} className={activeCategory===c?"active":""} onClick={()=>setActiveCategory(c)}>{c}</button>)}</div>}
 
@@ -689,6 +848,10 @@ function AuthPage({ mode, setMode, theme, toggleTheme, onBack }) {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [broadcastEditorRef, setBroadcastEditorRef] = useState(null);
+  const [broadcastFile, setBroadcastFile] = useState(null);
+  const [broadcastHtml, setBroadcastHtml] = useState("");
+  const [uploadingBroadcastFile, setUploadingBroadcastFile] = useState(false);
   const [error, setError] = useState("");
 
   const register = async (e) => {
@@ -765,16 +928,16 @@ function AuthPage({ mode, setMode, theme, toggleTheme, onBack }) {
 
       <div className="auth-layout">
         <div className="auth-side">
-          <div className="eyebrow"><span></span> Your next chapter</div>
-          <h1>{mode === "register" ? <>Start your<br /><em>discipline journey.</em></> : <>Welcome<br /><em>back.</em></>}</h1>
-          <p>{mode === "register" ? "Create your personal TRACKEN space and turn every study day into visible progress." : "Your tasks, records, goals and progress are waiting for you."}</p>
+          <div className="eyebrow"><span></span> TRACK WHAT MATTERS</div>
+          <h1>{mode === "register" ? <>Build a clearer<br /><em>way forward.</em></> : <>Welcome<br /><em>back.</em></>}</h1>
+          <p>{mode === "register" ? "Create your personal TRACKEN workspace and make everyday effort easier to see, review and improve." : "Your tasks, study, goals, habits, focus and progress are waiting in one place."}</p>
         </div>
 
         <div className="auth-card">
           <div className="auth-card-head">
-            <span className="mini-label">{mode === "register" ? "NEW CANDIDATE" : "RETURNING CANDIDATE"}</span>
-            <h2>{mode === "register" ? "Create your account" : "View your progress"}</h2>
-            <p>{mode === "register" ? "It only takes a minute to get started." : "Log in to continue your journey."}</p>
+            <span className="mini-label">{mode === "register" ? "START YOUR SYSTEM" : "WELCOME BACK"}</span>
+            <h2>{mode === "register" ? "Start your TRACKEN workspace" : "Return to your progress"}</h2>
+            <p>{mode === "register" ? "Bring your work, learning and progress into one clear system." : "Pick up where you left off and keep moving."}</p>
           </div>
 
           {mode !== "reset" && (
@@ -809,7 +972,7 @@ function AuthPage({ mode, setMode, theme, toggleTheme, onBack }) {
             {message && <div className="auth-message success" role="status" aria-live="polite">{message}</div>}
 
             <button className="primary-cta auth-submit" disabled={busy}>
-              {busy ? "Please wait..." : mode === "register" ? <>Start Your Journey <ArrowRight size={18} /></> : mode === "reset" ? <>Send Reset Link <ArrowRight size={18} /></> : <>Login <ArrowRight size={18} /></>}
+              {busy ? "Please wait..." : mode === "register" ? <>Start Tracking <ArrowRight size={18} /></> : mode === "reset" ? <>Send Reset Link <ArrowRight size={18} /></> : <>Login <ArrowRight size={18} /></>}
             </button>
           </form>
 
@@ -1184,7 +1347,7 @@ function Dashboard({ session, theme, toggleTheme, onLogout }) {
           <button className={`sidebar-item ${unreadUpdates ? "has-unread" : ""}`} onClick={() => setShowUpdates(true)}><Bell size={18} /><span className="sidebar-item-label">Updates</span>{unreadUpdates ? <span className="sidebar-count unread-count">{unreadUpdates}</span> : null}</button>
           {isAdmin && <button className="sidebar-item" onClick={() => setShowAdmin(true)}><ShieldCheck size={18} /><span className="sidebar-item-label">Admin</span></button>}
         </nav>
-        <div className="sidebar-spacer" /><div className="tracken-sidebar-score"><span>TRACKEN SCORE</span><strong>{score}</strong><small>{scoreLabel}</small></div><div className="tasken-sidebar-version">4.1.3 TRACKEN</div>
+        <div className="sidebar-spacer" /><div className="tracken-sidebar-score"><span>TRACKEN SCORE</span><strong>{score}</strong><small>{scoreLabel}</small></div><div className="tasken-sidebar-version">4.2.0 TRACKEN</div>
       </aside>
       <button className="mobile-sidebar-overlay" aria-label="Close navigation" onClick={() => setMobileSidebarOpen(false)}></button>
       <main className="dashboard-main tasken-main tracken-main">
@@ -1204,6 +1367,17 @@ function Dashboard({ session, theme, toggleTheme, onLogout }) {
               <article className="command-signal-card"><span className="card-kicker">EXECUTION</span><strong>{taskProgress}%</strong><span>tasks complete today</span><div><i style={{width:`${taskProgress}%`}}/></div></article>
               <article className="command-signal-card"><span className="card-kicker">CONSISTENCY</span><strong>{habits.length ? Math.round((activeHabitsToday.filter(h=>habitDoneToday(h)).length/activeHabitsToday.length)*100) : 0}%</strong><span>habits completed today</span><div><i style={{width:`${habits.length ? Math.round((activeHabitsToday.filter(h=>habitDoneToday(h)).length/activeHabitsToday.length)*100) : 0}%`}}/></div></article>
               <article className="command-signal-card"><span className="card-kicker">FOCUS</span><strong>{completedFocusSessions}</strong><span>focus sessions completed</span><div><i style={{width:`${Math.min(100, completedFocusSessions*20)}%`}}/></div></article>
+            </div>
+          </section>
+          <section className="tracken-intelligence-hero">
+            <div className="intelligence-intro">
+              <div><span className="card-kicker">TRACKEN INTELLIGENCE</span><h2>A clearer answer to <em>what matters next.</em></h2><p>Use the activity you already record to surface useful priorities, patterns and decisions — without turning the dashboard into another complicated tool.</p></div>
+              <div className="intelligence-pulse"><Sparkles size={17}/><span>LIVE FROM YOUR ACTIVITY</span></div>
+            </div>
+            <div className="intelligence-cards">
+              <article className="intelligence-card featured-intelligence"><div className="intelligence-card-top"><span>NEXT BEST MOVE</span><Zap size={16}/></div><strong>{todoTasks[0]?.title || (record.lecture_minutes < 60 ? "Protect a focused study block" : "Keep your current rhythm")}</strong><p>{todoTasks[0] ? `Your highest-priority open task is still in the runway. Finish it before adding more work.` : record.lecture_minutes < 60 ? "Your study record is light today. A focused block would strengthen today's evidence." : "Your current signals are balanced. Keep the system simple and repeat what is working."}</p><button onClick={()=>todoTasks[0]?scrollTo("track-tasks"):scrollTo("track-study")}>Take me there <ArrowRight size={14}/></button></article>
+              <article className="intelligence-card"><div className="intelligence-card-top"><span>PATTERN SIGNAL</span><TrendingUp size={16}/></div><strong>{weeklyTaskProgress >= 70 ? "Execution is holding" : "Execution has room"}</strong><p>{weeklyTaskProgress >= 70 ? `You completed ${weeklyTaskProgress}% of this week's recorded tasks. Keep protecting the queue.` : `Your weekly task completion is ${weeklyTaskProgress}%. Reduce the queue and close one meaningful loop.`}</p><div className="intelligence-meter"><i style={{width:`${weeklyTaskProgress}%`}}/></div></article>
+              <article className="intelligence-card"><div className="intelligence-card-top"><span>DAILY BRIEF</span><Sparkles size={16}/></div><strong>{scoreLabel}</strong><p>{score >= 70 ? "Your system is showing useful momentum across multiple signals." : "Start with one small action. TRACKEN will make the change visible as you build the record."}</p><div className="intelligence-tags"><span>Execution {taskProgress}%</span><span>Study {studyScore}%</span><span>Goal {goalProgress}%</span></div></article>
             </div>
           </section>
           <section className="tracken-grid-main">
@@ -1239,7 +1413,7 @@ function Dashboard({ session, theme, toggleTheme, onLogout }) {
           </section>
           <section className="tracken-grid-main bottom-grid"><article className="tracken-panel goal-panel"><div className="panel-heading"><div><span className="card-kicker">DESTINATION</span><h2>Goal momentum</h2></div><button className="ghost-small" onClick={()=>setShowTracker("goals")}>Manage <ChevronRight size={14}/></button></div>{topGoal?<><div className="goal-title-row"><div><b>{topGoal.title}</b><small>{topGoal.category||"Personal goal"}</small></div><strong>{goalProgress}%</strong></div><div className="big-progress"><i style={{width:`${goalProgress}%`}}/></div><div className="goal-meta"><span><b>{topGoal.current_value||0}</b> {topGoal.unit||"progress"}</span><span>{topGoal.target_date?`${Math.max(0,Math.ceil((new Date(`${topGoal.target_date}T12:00:00`)-today)/86400000))} days left`:"No deadline"}</span></div></>:<button className="goal-empty" onClick={()=>setShowTracker("goals")}><Target size={23}/><b>Give your effort a destination.</b><span>Create your first goal →</span></button>}</article><article className="tracken-panel insight-panel"><div className="panel-heading"><div><span className="card-kicker">TRACKEN INSIGHT</span><h2>One thing to improve</h2></div><Sparkles size={18}/></div><div className="insight-copy"><div className="insight-icon"><Zap size={19}/></div><div><b>{taskProgress < 70 ? "Close your task loop." : weeklyStudyMinutes < 300 ? "Protect a daily study block." : "Keep your current rhythm."}</b><p>{taskProgress < 70 ? "You have unfinished work today. Pick one high-impact task and finish it before adding more." : weeklyStudyMinutes < 300 ? "Your study engine has room to compound. A consistent 45–60 minute block can move the weekly curve." : "Your recent activity is balanced. Keep the system simple and repeat what is working."}</p></div></div><button className="insight-link" onClick={()=>setShowAnalytics(true)}>Open full analytics <ArrowRight size={15}/></button></article></section>
           <section className="achievement-strip" id="track-achievements"><div><Trophy size={20}/><div><span>ACHIEVEMENTS</span><b>Make progress visible.</b></div></div><div className="achievement-items"><span><Flame size={15}/> {Math.max(1, history.length)} active days</span><span><Clock3 size={15}/> {Math.floor(totalStudyMinutes/60)}h total study</span><span><CheckCheck size={15}/> {tasks.filter(t=>t.status==="completed").length} tasks completed</span></div></section>
-          <footer className="dashboard-product-footer"><div><strong>TRACKEN <span>by MMD</span></strong><small>Made with DeepIntelligence</small></div><span>Personal Progress OS · 4.1.3</span></footer>
+          <footer className="dashboard-product-footer"><div><strong>TRACKEN <span>by MMD</span></strong><small>Made with DeepIntelligence</small></div><span>Personal Progress OS · 4.2.0</span></footer>
         </div>
       </main>
     </div>
@@ -1735,7 +1909,7 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
       {tab==="runway"&&<section className="runway-engine">
         <div className="runway-hero">
           <div className="runway-hero-copy">
-            <span className="eyebrow"><span></span> DAILY OPERATING SYSTEM · 4.1.3</span>
+            <span className="eyebrow"><span></span> DAILY OPERATING SYSTEM · 4.2.0</span>
             <h2>Your day, turned into a <em>clear runway.</em></h2>
             <p>TRACKEN converts today's open work into a realistic sequence using priority, estimated duration and your available capacity. The goal is not to fill every minute — it is to finish the work that matters.</p>
             <div className="runway-date-controls">
@@ -1776,7 +1950,7 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
       </section>}
       {tab==="productivity"&&<section className="productivity-engine">
         <div className="productivity-hero">
-          <div><span className="eyebrow"><span></span> EXECUTION SYSTEM · 4.1.3</span><h2>Turn goals into <em>finished work.</em></h2><p>Projects, priorities, dependencies, recurring work and time capacity — one engine for deciding what deserves your attention.</p></div>
+          <div><span className="eyebrow"><span></span> EXECUTION SYSTEM · 4.2.0</span><h2>Turn goals into <em>finished work.</em></h2><p>Projects, priorities, dependencies, recurring work and time capacity — one engine for deciding what deserves your attention.</p></div>
           <div className="productivity-hero-score"><span>CAPACITY TODAY</span><strong>{Math.max(0,Math.round((engineCapacityMinutes-enginePlannedMinutes)/60*10)/10)}h</strong><small>{Math.round(enginePlannedMinutes/60*10)/10}h planned · {capacityHours}h capacity</small></div>
         </div>
         <article className="productivity-streak-card" onClick={()=>setShowStudySummary(true)} role="button" tabIndex="0" onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")setShowStudySummary(true);}}>
@@ -1790,7 +1964,6 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
           <article className="tracker-large-card engine-capacity-card"><div className="panel-heading"><div><span className="card-kicker">TIME CAPACITY</span><h2>Don't overbook yourself.</h2></div><Clock3 size={20}/></div><label className="engine-capacity-input"><span>Daily capacity</span><div><input type="number" min="1" max="24" step="0.5" value={capacityHours} onChange={e=>setCapacityHours(Math.max(1,Number(e.target.value)||1))}/><b>hours</b></div></label><div className="capacity-meter"><i style={{width:`${Math.min(100,enginePlannedMinutes/engineCapacityMinutes*100)}%`}}/></div><div className="capacity-stats"><span><b>{Math.round(enginePlannedMinutes/60*10)/10}h</b> planned</span><span><b>{Math.max(0,Math.round((engineCapacityMinutes-enginePlannedMinutes)/60*10)/10)}h</b> available</span></div><div className="engine-alert">{enginePlannedMinutes>engineCapacityMinutes?<><Bell size={16}/><span>Your plan exceeds today's capacity. Move lower-value work.</span></>:<><Check size={16}/><span>Your planned workload fits inside your stated capacity.</span></>}</div></article>
         </div>
         <div className="productivity-grid lower">
-          <article className="tracker-large-card automation-center-card"><div className="panel-heading"><div><span className="card-kicker">AUTOMATION CENTER · 01</span><h2>Recurring tasks.</h2><p className="tracker-copy">Create a rule once. TRACKEN keeps the planned work appearing on schedule.</p></div><RotateCcw size={20}/></div><div className="automation-form-grid"><input value={automationTitle} onChange={e=>setAutomationTitle(e.target.value)} placeholder="What should repeat?"/><select value={automationFrequency} onChange={e=>setAutomationFrequency(e.target.value)}><option value="daily">Every day</option><option value="weekdays">Every weekday</option><option value="weekly">Every week</option><option value="monthly">Every month</option></select><input type="date" value={automationStartDate} onChange={e=>setAutomationStartDate(e.target.value)}/><input type="date" value={automationEndDate} onChange={e=>setAutomationEndDate(e.target.value)} title="Optional end date"/><select value={automationPriority} onChange={e=>setAutomationPriority(e.target.value)}><option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><select value={automationDuration} onChange={e=>setAutomationDuration(Number(e.target.value))}><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">1 hour</option><option value="90">90 min</option><option value="120">2 hours</option></select><select value={automationProject} onChange={e=>setAutomationProject(e.target.value)}><option value="">No project</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><select value={automationGoal} onChange={e=>setAutomationGoal(e.target.value)}><option value="">No goal (optional)</option>{goals.filter(g=>g.status==="active").map(g=><option key={g.id} value={g.id}>{g.title}</option>)}</select><button className="primary-small" onClick={createRecurringAutomation}><RotateCcw size={15}/> Create automation</button></div><div className="automation-list">{recurringRules.map(rule=><div className={`automation-rule ${rule.enabled?"active":"paused"}`} key={rule.id}><div className="automation-rule-icon"><RotateCcw size={16}/></div><div className="automation-rule-main"><b>{rule.title}</b><small>{recurrenceLabel(rule.frequency)} · starts {rule.startDate}{rule.endDate?` · ends ${rule.endDate}`:""}{rule.goalId?` · Goal · ${goals.find(g=>String(g.id)===String(rule.goalId))?.title||"Linked goal"}`:""}</small></div><span className="automation-status">{rule.enabled?"ACTIVE":"PAUSED"}</span><button className="ghost-small" onClick={()=>toggleRecurringAutomation(rule.id)}>{rule.enabled?"Pause":"Resume"}</button><button className="ghost-small danger-ghost" onClick={()=>deleteRecurringAutomation(rule.id)}><Trash2 size={14}/></button></div>)}{!recurringRules.length&&<div className="automation-empty"><RotateCcw size={22}/><div><b>No recurring task rules yet.</b><small>Create one above and TRACKEN will handle the repetition.</small></div></div>}</div></article>
           <article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">CREATE WORK</span><h2>Capture the whole task.</h2></div><Plus size={20}/></div><div className="engine-form-grid"><input value={engineTaskTitle} onChange={e=>setEngineTaskTitle(e.target.value)} placeholder="Task that needs to get done…"/><input type="date" value={engineTaskDate} onChange={e=>setEngineTaskDate(e.target.value)}/><select value={engineTaskPriority} onChange={e=>setEngineTaskPriority(e.target.value)}><option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><select value={engineTaskDuration} onChange={e=>setEngineTaskDuration(Number(e.target.value))}><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">1 hour</option><option value="90">90 min</option><option value="120">2 hours</option></select><select value={engineTaskProject} onChange={e=>setEngineTaskProject(e.target.value)}><option value="">No project</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><select value={engineTaskRecurrence} onChange={e=>setEngineTaskRecurrence(e.target.value)}><option value="none">One-time</option><option value="daily">Every day</option><option value="weekly">Every week</option><option value="monthly">Every month</option></select><select value={engineTaskDependency} onChange={e=>setEngineTaskDependency(e.target.value)}><option value="">No dependency</option>{tasks.filter(t=>t.status!=="completed").slice(0,30).map(t=><option key={t.id} value={t.id}>After: {t.title}</option>)}</select><select value={engineTaskGoal} onChange={e=>setEngineTaskGoal(e.target.value)}><option value="">No goal (optional)</option>{goals.filter(g=>g.status==="active").map(g=><option key={g.id} value={g.id}>{g.title}</option>)}</select><button className="primary-small" onClick={createEngineTask}><Plus size={15}/> Create task</button></div></article>
           <article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">PROJECTS</span><h2>Workstreams with a finish line.</h2></div><BriefcaseBusiness size={20}/></div><div className="engine-project-create"><input value={projectName} onChange={e=>setProjectName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addProject()} placeholder="New project name…"/><button className="primary-small project-add-button" onClick={addProject}><Plus size={15}/> Project</button></div><div className="engine-project-list">{engineProjects.map(p=><div key={p.id}><div><b>{p.name}</b><small>{p.completed}/{p.items.length} tasks complete</small></div><strong>{p.progress}%</strong><i><em style={{width:`${p.progress}%`}}/></i></div>)}{!projects.length&&<div className="tracker-empty-big"><BriefcaseBusiness size={26}/><h3>Create your first workstream.</h3><p>Projects group tasks into a measurable outcome.</p></div>}</div></article>
         </div>
@@ -1809,10 +1982,32 @@ function TrackerHubPage({ initialTab="tasks", session, theme, toggleTheme, tasks
       {tab==="tasks"&&<section className="task-work-layout">
         <article className="tracker-hero-card task-work-summary"><div><span>TODAY'S WORK</span><strong>{todayTasks.length}</strong><p>{done} completed · {todayTasks.length-done} remaining</p></div><div className="task-summary-progress"><span>{todayTasks.length?Math.round(done/todayTasks.length*100):0}% complete</span><div className="tracker-progress"><i style={{width:`${todayTasks.length?done/todayTasks.length*100:0}%`}}/></div></div></article>
         <article className="tracker-large-card task-capture-card"><div className="panel-heading"><div><span className="card-kicker">QUICK CAPTURE</span><h2>Add a task here.</h2><p className="tracker-copy">Capture work without leaving the task system.</p></div><Plus size={20}/></div><div className="task-quick-add"><input value={taskQuickTitle} onChange={e=>setTaskQuickTitle(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addQuickTask()} placeholder="What needs to get done?"/><select value={taskQuickPriority} onChange={e=>setTaskQuickPriority(e.target.value)}><option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><input type="date" value={taskQuickDate} onChange={e=>setTaskQuickDate(e.target.value)}/><select value={taskQuickGoal} onChange={e=>setTaskQuickGoal(e.target.value)}><option value="">No goal (optional)</option>{goals.filter(g=>g.status==="active").map(g=><option key={g.id} value={g.id}>{g.title}</option>)}</select><button className="primary-small task-add-button" onClick={addQuickTask}><Plus size={15}/> Add task</button></div><div className="panel-heading task-queue-heading"><div><span className="card-kicker">PRIORITY QUEUE</span><h2>What needs your attention</h2></div><ListChecks size={20}/></div>{todayTasks.length?<div className="tracker-task-table">{todayTasks.slice(0,12).map(t=>editingTaskId===t.id?<div className="tracker-task-row tracker-task-row-edit" key={t.id}><span className={`tracker-status-dot ${t.status}`}></span><input className="task-inline-title" value={taskEdit.title} onChange={e=>setTaskEdit({...taskEdit,title:e.target.value})}/><select value={taskEdit.priority} onChange={e=>setTaskEdit({...taskEdit,priority:e.target.value})}><option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><input type="date" value={taskEdit.task_date} onChange={e=>setTaskEdit({...taskEdit,task_date:e.target.value})}/><select value={taskEdit.goal_id} onChange={e=>setTaskEdit({...taskEdit,goal_id:e.target.value})}><option value="">No goal</option>{goals.filter(g=>g.status==="active").map(g=><option key={g.id} value={g.id}>{g.title}</option>)}</select><div className="task-row-actions"><button className="primary-small task-save-button" onClick={saveTaskEdit}>Save changes</button><button className="ghost-small" onClick={cancelEditTask}>Cancel</button></div></div>:<div className="tracker-task-row" key={t.id}><button className={`task-check-button ${t.status==="completed"?"done":""}`} onClick={()=>toggleTask?.(t)} aria-label={t.status==="completed"?"Mark task open":"Mark task complete"}>{t.status==="completed"?<Check size={12}/>:null}</button><div className="task-row-main"><b className={t.status==="completed"?"task-completed-title":""}>{t.title}</b><small>{String(t.priority||"medium")} · Due {t.task_date||"No date"}{t.goal_id?` · Goal · ${goals.find(g=>String(g.id)===String(t.goal_id))?.title||"Linked goal"}`:""}</small></div><span className="task-status-label">{t.status==="completed"?"Completed":"Open"}</span><div className="task-row-actions"><button className="task-edit-button" onClick={()=>startEditTask(t)} aria-label={`Edit ${t.title}`} title="Edit task"><PenLine size={15}/></button><button className="task-edit-button task-delete-inline" onClick={()=>deleteTask?.(t)} aria-label={`Delete ${t.title}`} title="Delete task"><Trash2 size={15}/></button></div></div>)}</div>:<div className="tracker-empty-big"><ListChecks size={28}/><h3>Your queue is clear.</h3><p>Add a task above to build today's runway.</p></div>}</article>
+                  <article className="tracker-large-card automation-center-card"><div className="panel-heading"><div><span className="card-kicker">AUTOMATION CENTER · 01</span><h2>Recurring tasks.</h2><p className="tracker-copy">Create a rule once. TRACKEN keeps the planned work appearing on schedule.</p></div><RotateCcw size={20}/></div><div className="automation-form-grid"><input value={automationTitle} onChange={e=>setAutomationTitle(e.target.value)} placeholder="What should repeat?"/><select value={automationFrequency} onChange={e=>setAutomationFrequency(e.target.value)}><option value="daily">Every day</option><option value="weekdays">Every weekday</option><option value="weekly">Every week</option><option value="monthly">Every month</option></select><input type="date" value={automationStartDate} onChange={e=>setAutomationStartDate(e.target.value)}/><input type="date" value={automationEndDate} onChange={e=>setAutomationEndDate(e.target.value)} title="Optional end date"/><select value={automationPriority} onChange={e=>setAutomationPriority(e.target.value)}><option value="urgent">Urgent</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select><select value={automationDuration} onChange={e=>setAutomationDuration(Number(e.target.value))}><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">1 hour</option><option value="90">90 min</option><option value="120">2 hours</option></select><select value={automationProject} onChange={e=>setAutomationProject(e.target.value)}><option value="">No project</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><select value={automationGoal} onChange={e=>setAutomationGoal(e.target.value)}><option value="">No goal (optional)</option>{goals.filter(g=>g.status==="active").map(g=><option key={g.id} value={g.id}>{g.title}</option>)}</select><button className="primary-small" onClick={createRecurringAutomation}><RotateCcw size={15}/> Create automation</button></div><div className="automation-list">{recurringRules.map(rule=><div className={`automation-rule ${rule.enabled?"active":"paused"}`} key={rule.id}><div className="automation-rule-icon"><RotateCcw size={16}/></div><div className="automation-rule-main"><b>{rule.title}</b><small>{recurrenceLabel(rule.frequency)} · starts {rule.startDate}{rule.endDate?` · ends ${rule.endDate}`:""}{rule.goalId?` · Goal · ${goals.find(g=>String(g.id)===String(rule.goalId))?.title||"Linked goal"}`:""}</small></div><span className="automation-status">{rule.enabled?"ACTIVE":"PAUSED"}</span><button className="ghost-small" onClick={()=>toggleRecurringAutomation(rule.id)}>{rule.enabled?"Pause":"Resume"}</button><button className="ghost-small danger-ghost" onClick={()=>deleteRecurringAutomation(rule.id)}><Trash2 size={14}/></button></div>)}{!recurringRules.length&&<div className="automation-empty"><RotateCcw size={22}/><div><b>No recurring task rules yet.</b><small>Create one above and TRACKEN will handle the repetition.</small></div></div>}</div></article>
       </section>}
       {tab==="goals"&&<section className="goals-route-shell"><GoalsPage session={session} goals={goals} setGoals={setGoals} tasks={tasks} taskMeta={taskMeta} setTaskMeta={setTaskMeta} theme={theme} toggleTheme={toggleTheme} onBack={onBack} onError={(message)=>window.alert(message)} /></section>}
       {tab==="habits"&&<section className="tracker-content-grid habits-workspace"><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">CONSISTENCY ENGINE</span><h2>Build habits by showing up.</h2><p className="tracker-copy">Set a habit for a defined duration and choose exactly when it should be practiced. TRACKEN keeps rest days separate from missed days.</p></div><Flame size={20}/></div><div className="habit-control-bar"><div><strong>{habits.length}</strong><span>habits in your system</span></div><button className="tracker-big-action compact" onClick={openNewHabit}><Plus size={16}/> New habit</button></div>{showHabitForm&&<div className="habit-form-card"><div className="habit-form-head"><div><span className="card-kicker">{editingHabitId?"EDIT HABIT":"NEW HABIT"}</span><h3>{editingHabitId?"Refine your routine.":"What are you building?"}</h3></div><button className="icon-button" onClick={()=>setShowHabitForm(false)} aria-label="Close">×</button></div><div className="habit-form-grid"><label>Habit name<input value={habitForm.title} onChange={e=>setHabitForm({...habitForm,title:e.target.value})} placeholder="e.g. Read 20 pages"/></label><label>Start date<input type="date" value={habitForm.startDate} onChange={e=>setHabitForm({...habitForm,startDate:e.target.value})}/></label><label>Duration (days)<input type="number" min="1" max="365" value={habitForm.durationDays} onChange={e=>setHabitForm({...habitForm,durationDays:e.target.value})}/></label><label>Schedule<select value={habitForm.scheduleType} onChange={e=>setHabitForm({...habitForm,scheduleType:e.target.value})}><option value="daily">Every day</option><option value="weekdays">Weekdays</option><option value="custom">Custom days</option></select></label></div>{habitForm.scheduleType==="custom"&&<div className="habit-schedule-days"><span>Repeat on</span><div>{[[1,"Mon"],[2,"Tue"],[3,"Wed"],[4,"Thu"],[5,"Fri"],[6,"Sat"],[0,"Sun"]].map(([value,label])=>{const selected=(habitForm.scheduleDays||[]).includes(value);return <button key={value} type="button" className={selected?"selected":""} onClick={()=>setHabitForm(f=>({...f,scheduleDays:selected?(f.scheduleDays||[]).filter(d=>d!==value):[...(f.scheduleDays||[]),value]}))}>{label}</button>})}</div><small>Select at least one day. Rest days stay visible but cannot be marked complete.</small></div>}<div className="habit-form-actions"><button className="ghost-small" onClick={()=>setShowHabitForm(false)}>Cancel</button><button className="primary-small" onClick={saveHabit}>{editingHabitId?"Save changes":"Create habit"}</button></div></div>}<div className="habit-system-list">{habits.length ? habits.map(renderHabitCard) : <div className="tracker-empty-big"><Flame size={28}/><h3>Start your first habit.</h3><p>Choose a habit, give it a duration, and manually check each day you complete it.</p><button className="tracker-big-action compact" onClick={openNewHabit}><Plus size={16}/> Create your first habit</button></div>}</div></article></section>}
-      {tab==="focus"&&<section className="tracker-focus-layout"><article className="focus-command-card"><span>DEEP WORK</span><div className="tracker-focus-clock">{formatFocus(focusSeconds)}</div><div className="focus-presets">{[25,50,90].map(p=><button className={focusPreset===p?"selected":""} key={p} onClick={()=>{setFocusPreset(p);setFocusSeconds(p*60);setFocusRunning(false)}}>{p}m</button>)}</div><div className="focus-actions"><button className="primary-small" onClick={()=>setFocusRunning(v=>!v)}>{focusRunning?"Pause":"Start focus"}</button><button className="ghost-small" onClick={()=>{setFocusRunning(false);setFocusSeconds(focusPreset*60)}}>Reset</button></div></article><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">FOCUS PRINCIPLE</span><h2>Protect your best hours.</h2></div><Zap size={20}/></div><p className="tracker-copy">Use a focused session for the one task that matters most. TRACKEN keeps deep work and execution measurable without cluttering your workflow.</p><div className="tracker-feature-list"><span><Check size={15}/> No distractions</span><span><Check size={15}/> Preset sessions</span><span><Check size={15}/> Works with Study & Tasks</span></div></article><article className="tracker-large-card focus-time-card"><div className="panel-heading"><div><span className="card-kicker">TIME TRACKER</span><h2>Make time visible.</h2></div><Clock3 size={20}/></div><div className="focus-time-row"><div><strong>{formatTime(trackedSeconds)}</strong><span>{timeRunning?"Tracking now":"Time captured today"}</span></div><button className={`tracker-big-action compact ${timeRunning?"running":""}`} onClick={()=>setTimeRunning(v=>!v)}>{timeRunning?"Stop tracking":trackedSeconds>0?"Resume tracking":"Start tracking"}</button></div></article></section>}
+      {tab==="focus"&&<section className="tracker-focus-page">
+        <div className="focus-page-hero">
+          <div><span className="eyebrow"><span></span> FOCUS / DEEP WORK</span><h2>Make time feel <em>intentional.</em></h2><p>Choose a rhythm, protect the block, and let TRACKEN turn focused time into visible progress.</p></div>
+          <div className="focus-live-badge"><i></i><span>{focusRunning?"SESSION RUNNING":"READY FOR FOCUS"}</span></div>
+        </div>
+        <div className="focus-cockpit-grid">
+          <article className="focus-command-card focus-command-card-premium">
+            <div className="focus-command-top"><span>FOCUS TIMER</span><small>{focusRunning?"IN SESSION":"YOUR NEXT BLOCK"}</small></div>
+            <div className="focus-timer-orbit" style={{"--focus-pct":`${Math.max(0,Math.min(100,Math.round((1-(focusSeconds/(Math.max(1,focusPreset*60))))*100)))}%`}}><div className="focus-orbit-inner"><span>{focusRunning?"FOCUSING":"READY"}</span><strong>{formatFocus(focusSeconds)}</strong><small>{focusPreset} minute block</small></div></div>
+            <div className="focus-presets focus-presets-premium">{[15,25,50,90].map(p=><button className={focusPreset===p?"selected":""} key={p} onClick={()=>{setFocusPreset(p);setFocusSeconds(p*60);setFocusRunning(false)}}>{p}<small>min</small></button>)}</div>
+            <div className="focus-actions focus-actions-premium"><button className="primary-small" onClick={()=>setFocusRunning(v=>!v)}>{focusRunning?<><span>Pause session</span></>:<><Timer size={15}/><span>Start focus</span></>}</button><button className="ghost-small" onClick={()=>{setFocusRunning(false);setFocusSeconds(focusPreset*60)}}>Reset</button></div>
+          </article>
+          <div className="focus-insight-stack">
+            <article className="tracker-large-card focus-intent-card"><div className="panel-heading"><div><span className="card-kicker">FOCUS INTENT</span><h2>One block. One outcome.</h2></div><Target size={20}/></div><div className="focus-intent-main"><div className="focus-intent-icon"><Zap size={18}/></div><div><strong>{tasks.find(t=>t.status!=="completed" && t.task_date===new Date().toISOString().slice(0,10))?.title || "Choose the one task that matters most."}</strong><small>{todayTasks.length?`${todayTasks.filter(t=>t.status!=="completed").length} open task${todayTasks.filter(t=>t.status!=="completed").length===1?"":"s"} today` : "Your queue is clear — use this block for deep work."}</small></div></div><div className="focus-principles"><span><Check size={14}/> Silence notifications</span><span><Check size={14}/> Keep one outcome visible</span><span><Check size={14}/> Review after the block</span></div></article>
+            <article className="tracker-large-card focus-stats-card"><div className="panel-heading"><div><span className="card-kicker">TODAY / TIME CAPTURE</span><h2>Your time, accounted for.</h2></div><Clock3 size={20}/></div><div className="focus-time-hero"><div><strong>{formatTime(trackedSeconds)}</strong><span>{timeRunning?"Time tracker is running":"Tracked today"}</span></div><button className={`tracker-big-action compact ${timeRunning?"running":""}`} onClick={()=>setTimeRunning(v=>!v)}>{timeRunning?"Stop tracking":trackedSeconds>0?"Resume tracking":"Start tracking"}</button></div><div className="focus-stat-strip"><div><b>{Math.floor(trackedSeconds/3600)}h</b><span>captured</span></div><div><b>{Math.floor(trackedSeconds/60)%60}m</b><span>this session</span></div><div><b>{focusRunning?"Live":"Ready"}</b><span>timer state</span></div></div></article>
+          </div>
+        </div>
+        <div className="focus-bottom-grid">
+          <article className="tracker-large-card focus-rhythm-card"><div className="panel-heading"><div><span className="card-kicker">FOCUS RHYTHMS</span><h2>Pick the kind of session you need.</h2></div><Timer size={20}/></div><div className="focus-rhythm-grid"><button onClick={()=>{setFocusPreset(15);setFocusSeconds(15*60);setFocusRunning(false)}}><span>QUICK START</span><strong>15 min</strong><small>Clear one small blocker.</small></button><button onClick={()=>{setFocusPreset(25);setFocusSeconds(25*60);setFocusRunning(false)}}><span>CLASSIC</span><strong>25 min</strong><small>Focused work with a clean finish line.</small></button><button onClick={()=>{setFocusPreset(50);setFocusSeconds(50*60);setFocusRunning(false)}}><span>DEEP BLOCK</span><strong>50 min</strong><small>Best for study, coding or writing.</small></button><button onClick={()=>{setFocusPreset(90);setFocusSeconds(90*60);setFocusRunning(false)}}><span>FLOW</span><strong>90 min</strong><small>Long-form work with room to think.</small></button></div></article>
+          <article className="tracker-large-card focus-bottom-insight"><div className="panel-heading"><div><span className="card-kicker">THE FOCUS LOOP</span><h2>Start → protect → review.</h2></div><Sparkles size={20}/></div><div className="focus-loop"><div><b>01</b><span>START</span><small>Pick one outcome.</small></div><i></i><div><b>02</b><span>PROTECT</span><small>Stay inside the block.</small></div><i></i><div><b>03</b><span>REVIEW</span><small>Carry the result forward.</small></div></div><p className="tracker-copy">Focused time becomes more valuable when it leaves evidence behind. Your sessions can feed the wider TRACKEN picture instead of disappearing when the timer ends.</p></article>
+        </div>
+      </section>}
       {((tab==="money")||(tab==="budget"))&&<FinanceEngine tab={tab} money={money} setMoney={setMoney} budget={budget} setBudget={setBudget} budgetOverride={budgetOverride} setBudgetOverride={setBudgetOverride} budgetCategories={budgetCategories} setBudgetCategories={setBudgetCategories} cashflowAutomationRules={cashflowAutomationRules} cashflowFrequencyLabel={cashflowFrequencyLabel} createCashflowAutomation={createCashflowAutomation} toggleCashflowAutomation={toggleCashflowAutomation} deleteCashflowAutomation={deleteCashflowAutomation} cashflowAutomationTitle={cashflowAutomationTitle} setCashflowAutomationTitle={setCashflowAutomationTitle} cashflowAutomationType={cashflowAutomationType} setCashflowAutomationType={setCashflowAutomationType} cashflowAutomationAmount={cashflowAutomationAmount} setCashflowAutomationAmount={setCashflowAutomationAmount} cashflowAutomationCategory={cashflowAutomationCategory} setCashflowAutomationCategory={setCashflowAutomationCategory} cashflowAutomationFrequency={cashflowAutomationFrequency} setCashflowAutomationFrequency={setCashflowAutomationFrequency} cashflowAutomationStartDate={cashflowAutomationStartDate} setCashflowAutomationStartDate={setCashflowAutomationStartDate} cashflowAutomationEndDate={cashflowAutomationEndDate} setCashflowAutomationEndDate={setCashflowAutomationEndDate} goals={goals} setGoals={setGoals} financeGoalPlans={financeGoalPlans} setFinanceGoalPlans={setFinanceGoalPlans} financeGoals={financeGoals} setFinanceGoals={setFinanceGoals} onGoalContribution={addFinanceGoalContribution} createFinanceGoal={createFinanceGoal} session={session} />}
       {tab==="investments"&&<section className="tracker-money finance-wealth-page"><div className="money-kpis"><article><span>PORTFOLIO VALUE</span><strong>₹{portfolio.toLocaleString("en-IN")}</strong></article><article><span>INVESTED CAPITAL</span><strong>₹{invested.toLocaleString("en-IN")}</strong></article><article><span>GAIN / LOSS</span><strong className={portfolio-invested>=0?"positive":"negative"}>{portfolio-invested>=0?"+":"−"}₹{Math.abs(portfolio-invested).toLocaleString("en-IN")}</strong></article><article><span>RETURN</span><strong>{invested>0?`${((portfolio-invested)/invested*100).toFixed(1)}%`:"—"}</strong></article></div><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">INVESTMENT PORTFOLIO</span><h2>Understand every holding.</h2><p className="tracker-copy">Track invested capital, current value, profit or loss and portfolio weight.</p></div><BriefcaseBusiness size={20}/></div><div className="tracker-add-row money-add"><input value={holding.name} onChange={e=>setHolding({...holding,name:e.target.value})} placeholder="Asset / fund name"/><input type="number" value={holding.invested} onChange={e=>setHolding({...holding,invested:e.target.value})} placeholder="Invested capital"/><input type="number" value={holding.value} onChange={e=>setHolding({...holding,value:e.target.value})} placeholder="Current value"/><button onClick={addInvestment}><Plus size={16}/> Add holding</button></div><div className="investment-table-wrap"><table className="investment-table"><thead><tr><th>Holding</th><th>Invested</th><th>Current</th><th>Gain / Loss</th><th>Return</th><th>Weight</th><th></th></tr></thead><tbody>{investments.map(x=>{const gain=Number(x.value||0)-Number(x.invested||0);const ret=Number(x.invested||0)>0?gain/Number(x.invested)*100:0;const weight=portfolio>0?Number(x.value||0)/portfolio*100:0;return editingInvestmentId===x.id?<tr key={x.id}><td><input value={investmentEdit.name} onChange={e=>setInvestmentEdit({...investmentEdit,name:e.target.value})}/></td><td><input type="number" value={investmentEdit.invested} onChange={e=>setInvestmentEdit({...investmentEdit,invested:e.target.value})}/></td><td><input type="number" value={investmentEdit.value} onChange={e=>setInvestmentEdit({...investmentEdit,value:e.target.value})}/></td><td colSpan="3">Edit holding details</td><td><button className="primary-small" onClick={saveInvestmentEdit}>Save</button><button className="ghost-small" onClick={()=>setEditingInvestmentId(null)}>Cancel</button></td></tr>:<tr key={x.id}><td><b>{x.name}</b></td><td>{fmtIN(x.invested)}</td><td>{fmtIN(x.value)}</td><td className={gain>=0?"positive":"negative"}>{gain>=0?"+":"−"}{fmtIN(Math.abs(gain))}</td><td className={gain>=0?"positive":"negative"}>{ret.toFixed(1)}%</td><td>{weight.toFixed(1)}%</td><td><div className="row-actions"><button onClick={()=>startEditInvestment(x)} aria-label="Edit investment"><PenLine size={15}/></button><button onClick={()=>deleteInvestment(x.id)} aria-label="Delete investment"><Trash2 size={15}/></button></div></td></tr>})}</tbody></table></div>{!investments.length&&<div className="tracker-empty-big"><BriefcaseBusiness size={28}/><h3>Your portfolio is empty.</h3><p>Add holdings to see detailed performance.</p></div>}</article><div className="finance-wealth-grid"><article className="tracker-large-card"><PanelHead kicker="ALLOCATION" title="Portfolio mix" icon={<PieChart size={20}/>}/>{investments.length?investments.map(x=><div className="finance-bar-row" key={x.id}><div><span>{x.name}</span><b>{portfolio?`${(Number(x.value||0)/portfolio*100).toFixed(1)}%`:"0%"}</b></div><i><em style={{width:`${portfolio?clamp(Number(x.value||0)/portfolio*100,2,100):0}%`}}/></i></div>):<div className="finance-empty">Add holdings to build your allocation.</div>}</article><article className="tracker-large-card"><PanelHead kicker="PORTFOLIO INSIGHT" title="What your numbers say" icon={<Sparkles size={20}/>}/><p className="tracker-copy finance-readable-copy">{portfolio>=invested?`Your portfolio is currently ${fmtIN(portfolio-invested)} above invested capital.`:`Your portfolio is currently ${fmtIN(invested-portfolio)} below invested capital.`}</p><p className="tracker-copy">Use current value as the latest manual valuation. TRACKEN does not fetch live market prices yet.</p></article></div></section>}
       {tab==="networth"&&<section className="tracker-money finance-wealth-page"><div className="money-kpis"><article><span>NET WORTH</span><strong>₹{(portfolio+Math.max(0,moneyBalance)+assets.reduce((a,x)=>a+Number(x.value||0),0)-liabilities.reduce((a,x)=>a+Number(x.value||0),0)).toLocaleString("en-IN")}</strong></article><article><span>TOTAL ASSETS</span><strong>₹{(portfolio+Math.max(0,moneyBalance)+assets.reduce((a,x)=>a+Number(x.value||0),0)).toLocaleString("en-IN")}</strong></article><article><span>LIABILITIES</span><strong className="negative">₹{liabilities.reduce((a,x)=>a+Number(x.value||0),0).toLocaleString("en-IN")}</strong></article><article><span>LIQUID CASH</span><strong>₹{Math.max(0,moneyBalance).toLocaleString("en-IN")}</strong></article></div><article className="tracker-large-card"><div className="panel-heading"><div><span className="card-kicker">PERSONAL BALANCE SHEET</span><h2>Know what you own and owe.</h2><p className="tracker-copy">Keep investments, cash, other assets and outstanding liabilities together.</p></div><Landmark size={20}/></div><div className="tracker-add-row"><button onClick={addAsset}><Plus size={16}/> Add asset</button><button onClick={addLiability}><Plus size={16}/> Add liability</button></div><div className="tracker-stat-grid"><div><b>₹{portfolio.toLocaleString("en-IN")}</b><span>Investments</span></div><div><b>₹{Math.max(0,moneyBalance).toLocaleString("en-IN")}</b><span>Cash</span></div><div><b>{assets.length}</b><span>Other assets</span></div><div><b>{liabilities.length}</b><span>Liabilities</span></div></div><div className="balance-lists"><div><span>ASSETS</span>{assets.length?assets.map(x=>editingAssetId===x.id?<div className="wealth-edit-row" key={x.id}><input value={assetEdit.name} onChange={e=>setAssetEdit({...assetEdit,name:e.target.value})}/><input type="number" value={assetEdit.value} onChange={e=>setAssetEdit({...assetEdit,value:e.target.value})}/><button className="primary-small" onClick={saveAssetEdit}>Save</button><button className="ghost-small" onClick={()=>setEditingAssetId(null)}>Cancel</button></div>:<p key={x.id}><b>{x.name}</b><strong>{fmtIN(x.value)}</strong><span className="wealth-actions"><button onClick={()=>startEditAsset(x)} aria-label="Edit asset"><PenLine size={14}/></button><button onClick={()=>deleteAsset(x.id)} aria-label="Delete asset"><Trash2 size={14}/></button></span></p>):<p className="muted-row">No other assets added.</p>}</div><div><span>LIABILITIES</span>{liabilities.length?liabilities.map(x=>editingLiabilityId===x.id?<div className="wealth-edit-row" key={x.id}><input value={liabilityEdit.name} onChange={e=>setLiabilityEdit({...liabilityEdit,name:e.target.value})}/><input type="number" value={liabilityEdit.value} onChange={e=>setLiabilityEdit({...liabilityEdit,value:e.target.value})}/><button className="primary-small" onClick={saveLiabilityEdit}>Save</button><button className="ghost-small" onClick={()=>setEditingLiabilityId(null)}>Cancel</button></div>:<p key={x.id}><b>{x.name}</b><strong>{fmtIN(x.value)}</strong><span className="wealth-actions"><button onClick={()=>startEditLiability(x)} aria-label="Edit liability"><PenLine size={14}/></button><button onClick={()=>deleteLiability(x.id)} aria-label="Delete liability"><Trash2 size={14}/></button></span></p>):<p className="muted-row">No liabilities added.</p>}</div></div></article><div className="finance-wealth-grid"><article className="tracker-large-card"><PanelHead kicker="NET WORTH COMPOSITION" title="Where your wealth sits" icon={<CircleDollarSign size={20}/>}/><div className="finance-wealth-stat"><span>Investments</span><b>{fmtIN(portfolio)}</b></div><div className="finance-wealth-stat"><span>Cash</span><b>{fmtIN(Math.max(0,moneyBalance))}</b></div><div className="finance-wealth-stat"><span>Other assets</span><b>{fmtIN(assets.reduce((a,x)=>a+Number(x.value||0),0))}</b></div><div className="finance-wealth-stat"><span>Less liabilities</span><b className="negative">−{fmtIN(liabilities.reduce((a,x)=>a+Number(x.value||0),0))}</b></div></article><article className="tracker-large-card"><PanelHead kicker="NET WORTH INSIGHT" title="Your financial position" icon={<Sparkles size={20}/>}/><p className="tracker-copy finance-readable-copy">Net worth is calculated as investments + cash + other assets − liabilities.</p><p className="tracker-copy">Update asset and liability values whenever your latest balances change.</p></article></div></section>}
@@ -1838,6 +2033,9 @@ function CalendarHistoryPage({ session, theme, toggleTheme, onBack }) {
   const userId = session.user.id;
   const [records, setRecords] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [userStates, setUserStates] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedUserDetail, setSelectedUserDetail] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [month, setMonth] = useState(new Date());
   const [loading, setLoading] = useState(true);
@@ -2399,7 +2597,7 @@ function UpdatesPage({ session, theme, toggleTheme, onBack, onUnreadChange = () 
           <section className="updates-list">
             {loading ? <div className="updates-empty"><Bell size={26} /><h3>Loading updates…</h3></div> : updates.length ? updates.map((item) => {
               const unreadItem = !readIds.has(item.id);
-              return <article key={item.id} className={`update-card ${unreadItem ? "unread" : ""}`} onClick={() => markRead(item.id)}><div className={`update-type ${String(item.type || "General").toLowerCase()}`}><Megaphone size={18} /></div><div className="update-body"><div className="update-meta"><span>{item.type || "General"}</span><time>{new Date(item.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time>{unreadItem && <b>NEW</b>}</div><h3>{item.title}</h3><p>{item.message}</p><small>{item.recipient_user_id ? "Direct message" : "For all TRACKEN users"}</small></div>{unreadItem && <span className="unread-dot" />}</article>;
+              return <article key={item.id} className={`update-card ${unreadItem ? "unread" : ""}`} onClick={() => markRead(item.id)}><div className={`update-type ${String(item.type || "General").toLowerCase()}`}><Megaphone size={18} /></div><div className="update-body"><div className="update-meta"><span>{item.type || "General"}</span><time>{new Date(item.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</time>{unreadItem && <b>NEW</b>}</div><h3>{item.title}</h3>{(() => { const payload=parseUpdatePayload(item.message); return <><div className="update-rich-content" dangerouslySetInnerHTML={{__html:normalizeArticleHtml(payload.html)}} />{payload.attachment?.url && <a className="update-attachment-card" href={payload.attachment.url} target="_blank" rel="noreferrer noopener" onClick={e=>e.stopPropagation()}><span className="update-attachment-icon"><FileText size={19}/></span><span><strong>{payload.attachment.name || "Attached file"}</strong><small>{payload.attachment.size ? formatFileSize(payload.attachment.size) : "Open file"}</small></span><Download size={18}/></a>}</> })()}<small>{item.recipient_user_id ? "Direct message" : "For all TRACKEN users"}</small></div>{unreadItem && <span className="unread-dot" />}</article>;
             }) : <div className="updates-empty"><Bell size={26} /><h3>No updates yet</h3><p>When TRACKEN has something important to share, you'll find it here.</p></div>}
           </section>
         </main>
@@ -2413,6 +2611,9 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
   const [users, setUsers] = useState([]);
   const [records, setRecords] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [userStates, setUserStates] = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedUserDetail, setSelectedUserDetail] = useState(null);
   const [goals, setGoals] = useState([]);
   const [profile, setProfile] = useState(emptyProfile);
   const [loading, setLoading] = useState(true);
@@ -2421,10 +2622,16 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
   const [type, setType] = useState("Notice");
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [broadcastEditorRef, setBroadcastEditorRef] = useState(null);
+  const [broadcastFile, setBroadcastFile] = useState(null);
+  const [broadcastHtml, setBroadcastHtml] = useState("");
+  const [uploadingBroadcastFile, setUploadingBroadcastFile] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [sentHistory, setSentHistory] = useState([]);
   const [search, setSearch] = useState("");
+  const [financeSearch, setFinanceSearch] = useState("");
+  const [financeSearchInput, setFinanceSearchInput] = useState("");
   const [blogPosts, setBlogPosts] = useState([]);
   const [blogTitle, setBlogTitle] = useState("");
   const [blogSlug, setBlogSlug] = useState("");
@@ -2445,56 +2652,117 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
   const [galleryCaption, setGalleryCaption] = useState("");
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
-  const loadAdminData = async () => {
-    setLoading(true); setError("");
-    const [usersRes, recordsRes, tasksRes, goalsRes, historyRes, blogRes, galleryRes] = await Promise.all([
-      supabase.rpc("admin_list_users"),
-      supabase.from("daily_records").select("*").order("record_date", { ascending: false }).limit(5000),
-      supabase.from("tasks").select("*").limit(5000),
-      supabase.from("goals").select("*").limit(5000),
-      supabase.from("updates").select("*").order("created_at", { ascending: false }).limit(1000),
-      supabase.from("blog_posts").select("*").order("created_at", { ascending: false }).limit(1000),
-      supabase.from("journal_gallery").select("*").order("created_at", { ascending: false }).limit(500)
-    ]);
-    const firstError = [usersRes, recordsRes, tasksRes, goalsRes, historyRes, blogRes, galleryRes].find((res) => res.error);
-    if (firstError?.error) setError(firstError.error.message);
-    setUsers(usersRes.data || []);
-    setRecords(recordsRes.data || []);
-    setTasks(tasksRes.data || []);
-    setGoals(goalsRes.data || []);
-    setSentHistory((historyRes.data || []).filter((item) => item.created_by === session.user.id));
-    if (blogRes?.data) setBlogPosts(blogRes.data);
-    if (galleryRes?.data) setGalleryImages(galleryRes.data);
-    setLoading(false);
+  const adminLoadInFlight = useRef(false);
+  const loadAdminData = async (showInitialLoader = false) => {
+    if (adminLoadInFlight.current) return;
+    adminLoadInFlight.current = true;
+    if (showInitialLoader) setLoading(true);
+    setError("");
+    try {
+      const [usersRes, recordsRes, tasksRes, goalsRes, stateRes, historyRes, blogRes, galleryRes] = await Promise.all([
+        supabase.rpc("admin_list_users"),
+        supabase.from("daily_records").select("*").order("record_date", { ascending: false }).limit(5000),
+        supabase.from("tasks").select("*").limit(5000),
+        supabase.from("goals").select("*").limit(5000),
+        supabase.from("user_app_state").select("user_id,money,investments,assets,liabilities,habits,focus_sessions,tracked_seconds").limit(5000),
+        supabase.from("updates").select("*").order("created_at", { ascending: false }).limit(1000),
+        supabase.from("blog_posts").select("*").order("created_at", { ascending: false }).limit(1000),
+        supabase.from("journal_gallery").select("*").order("created_at", { ascending: false }).limit(500)
+      ]);
+      const firstError = [usersRes, recordsRes, tasksRes, goalsRes, stateRes, historyRes, blogRes, galleryRes].find((res) => res.error);
+      if (firstError?.error) setError(firstError.error.message);
+      if (!usersRes.error) setUsers(usersRes.data || []);
+      if (!recordsRes.error) setRecords(recordsRes.data || []);
+      if (!tasksRes.error) setTasks(tasksRes.data || []);
+      if (!goalsRes.error) setGoals(goalsRes.data || []);
+      if (!stateRes.error) setUserStates(stateRes.data || []);
+      if (!historyRes.error) setSentHistory((historyRes.data || []).filter((item) => item.created_by === session.user.id));
+      if (!blogRes?.error) setBlogPosts(blogRes.data || []);
+      if (!galleryRes?.error) setGalleryImages(galleryRes.data || []);
+    } catch (err) {
+      setError(err?.message || "Could not refresh the Admin Center.");
+    } finally {
+      if (showInitialLoader) setLoading(false);
+      adminLoadInFlight.current = false;
+    }
   };
 
-  useEffect(() => { loadAdminData(); }, []);
+  useEffect(() => {
+    loadAdminData(true);
+    const timer = setInterval(() => loadAdminData(false), 10000);
+    const channel = supabase.channel("admin-live-state")
+      .on("postgres_changes", { event: "*", schema: "public", table: "user_app_state" }, () => loadAdminData(false))
+      .on("postgres_changes", { event: "*", schema: "public", table: "daily_records" }, () => loadAdminData(false))
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => loadAdminData(false))
+      .on("postgres_changes", { event: "*", schema: "public", table: "goals" }, () => loadAdminData(false))
+      .on("postgres_changes", { event: "*", schema: "public", table: "updates" }, () => loadAdminData(false))
+      .subscribe();
+    return () => { clearInterval(timer); supabase.removeChannel(channel); };
+  }, []);
+
+  const fileToDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read the selected file."));
+    reader.readAsDataURL(file);
+  });
+
+  const uploadAdminFile = async (file, folder="broadcast") => {
+    if (!file) return null;
+    if (file.size > 25 * 1024 * 1024) throw new Error("Files must be 25 MB or smaller.");
+    setUploadingBroadcastFile(true);
+    const ext=(file.name.split(".").pop()||"bin").toLowerCase().replace(/[^a-z0-9]/g,"") || "bin";
+    const filename=`${Date.now()}-${Math.random().toString(36).slice(2,9)}.${ext}`;
+    const candidates=["journal-article","journal-gallery"];
+    let lastError=null;
+    try {
+      for (const bucket of candidates) {
+        const path=`${session.user.id}/${folder}/${filename}`;
+        const {error:uploadError}=await supabase.storage.from(bucket).upload(path,file,{cacheControl:"3600",upsert:false,contentType:file.type||"application/octet-stream"});
+        if (uploadError) { lastError=uploadError; continue; }
+        const {data}=supabase.storage.from(bucket).getPublicUrl(path);
+        if (data?.publicUrl) return {url:data.publicUrl,name:file.name,size:file.size,type:file.type||"application/octet-stream",storage_path:path,bucket};
+        lastError=new Error(`Storage bucket ${bucket} did not return a public URL.`);
+      }
+      // Some existing TRACKEN Supabase projects have older Storage policies.
+      // For small attachments, fall back to a self-contained data URL so an
+      // update/article can still be published instead of silently failing.
+      if (file.size <= 5 * 1024 * 1024) {
+        const dataUrl = await fileToDataUrl(file);
+        if (dataUrl) return {url:dataUrl,name:file.name,size:file.size,type:file.type||"application/octet-stream",embedded:true};
+      }
+      throw lastError || new Error("Could not upload the file. Check the Storage policies for the journal-article bucket.");
+    } finally {
+      setUploadingBroadcastFile(false);
+    }
+  };
 
   const sendUpdate = async (e) => {
     e.preventDefault();
-    if (!title.trim() || !message.trim() || sending) return;
+    if (!title.trim() || sending) return;
     setSending(true); setError(""); setSent(false);
-    const { data, error: sendError } = await supabase.from("updates").insert({ title: title.trim(), message: message.trim(), type, recipient_user_id: target === "all" ? null : target, created_by: session.user.id }).select().single();
-    setSending(false);
-    if (sendError) return setError(sendError.message);
-    setSentHistory((current) => [{
-      id: data?.id || `local-${Date.now()}`,
-      title: title.trim(),
-      message: message.trim(),
-      type,
-      recipient_user_id: target === "all" ? null : target,
-      created_by: session.user.id,
-      created_at: new Date().toISOString()
-    }, ...current]);
-    setTitle(""); setMessage(""); setSent(true);
-    setTimeout(() => setSent(false), 3500);
+    let attachment=null;
+    try {
+      if(broadcastFile) attachment=await uploadAdminFile(broadcastFile,"broadcast");
+      const editorHtml=broadcastEditorRef ? normalizeArticleHtml(broadcastEditorRef.innerHTML) : normalizeArticleHtml(message.trim());
+      if(!editorHtml.replace(/<[^>]*>/g,"").trim() && !attachment) throw new Error("Add a message or attach a file.");
+      const stored=JSON.stringify({__trackenUpdate:1,html:editorHtml,attachment});
+      const { data, error: sendError } = await supabase.from("updates").insert({ title: title.trim(), message: stored, type, recipient_user_id: target === "all" ? null : target, created_by: session.user.id }).select().single();
+      if (sendError) throw sendError;
+      setSentHistory((current) => [{...(data||{}),id:data?.id||`local-${Date.now()}`,title:title.trim(),message:stored,type,recipient_user_id:target === "all" ? null : target,created_by:session.user.id,created_at:new Date().toISOString()}, ...current]);
+      setTitle(""); setMessage(""); setBroadcastFile(null); setBroadcastHtml(""); if(broadcastEditorRef) broadcastEditorRef.innerHTML=""; setSent(true);
+      setTimeout(() => setSent(false), 3500);
+    } catch(err){
+      if(attachment?.bucket && attachment?.storage_path) await supabase.storage.from(attachment.bucket).remove([attachment.storage_path]).catch(()=>{});
+      setError(err?.message||"Could not send update.");
+    } finally { setSending(false); }
   };
 
-  const startEditUpdate = (item) => { setEditingUpdateId(item.id); setUpdateEdit({title:item.title||"", message:item.message||"", type:item.type||"Notice"}); };
+  const startEditUpdate = (item) => { const payload=parseUpdatePayload(item.message); setEditingUpdateId(item.id); setUpdateEdit({title:item.title||"", message:payload.html||"", type:item.type||"Notice"}); };
   const cancelEditUpdate = () => { setEditingUpdateId(null); setUpdateEdit({title:"", message:"", type:"Notice"}); };
   const saveUpdateEdit = async () => {
-    if(!editingUpdateId || !updateEdit.title.trim() || !updateEdit.message.trim()) return;
-    const {data,error:editError}=await supabase.from("updates").update({title:updateEdit.title.trim(),message:updateEdit.message.trim(),type:updateEdit.type}).eq("id",editingUpdateId).select().single();
+    if(!editingUpdateId || !updateEdit.title.trim()) return;
+    const currentItem=sentHistory.find(x=>x.id===editingUpdateId); const currentPayload=parseUpdatePayload(currentItem?.message||""); const nextMessage=JSON.stringify({__trackenUpdate:1,html:normalizeArticleHtml(updateEdit.message.trim()),attachment:currentPayload.attachment||null}); const {data,error:editError}=await supabase.from("updates").update({title:updateEdit.title.trim(),message:nextMessage,type:updateEdit.type}).eq("id",editingUpdateId).select().single();
     if(editError){setError(editError.message);return;}
     setSentHistory(current=>current.map(item=>item.id===editingUpdateId?data:item)); cancelEditUpdate();
   };
@@ -2574,18 +2842,46 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
     setUploadingArticleImage(true); setError("");
     try {
       const ext=(file.name.split(".").pop()||"png").toLowerCase();
-      const path=`${session.user.id}/${Date.now()}-${Math.random().toString(36).slice(2,9)}.${ext}`;
-      const {error:uploadError}=await supabase.storage.from("journal-article").upload(path,file,{cacheControl:"3600",upsert:false,contentType:file.type});
-      if(uploadError) throw uploadError;
-      const {data}=supabase.storage.from("journal-article").getPublicUrl(path);
+      const filename=`${Date.now()}-${Math.random().toString(36).slice(2,9)}.${ext}`;
+      let publicUrl=""; let storageBucket=""; let storagePath=""; let lastError=null;
+      for (const bucket of ["journal-article","journal-gallery"]) {
+        const path=`${session.user.id}/article-images/${filename}`;
+        const {error:uploadError}=await supabase.storage.from(bucket).upload(path,file,{cacheControl:"3600",upsert:false,contentType:file.type});
+        if(uploadError){lastError=uploadError;continue;}
+        const {data}=supabase.storage.from(bucket).getPublicUrl(path);
+        if(data?.publicUrl){publicUrl=data.publicUrl;storageBucket=bucket;storagePath=path;break;}
+      }
+      if(!publicUrl && file.size <= 5 * 1024 * 1024) publicUrl = await fileToDataUrl(file);
+      if(!publicUrl) throw lastError || new Error("Could not create a public article image URL.");
       const editor=blogContentRef.current;
-      if(!editor || !data?.publicUrl) throw new Error("Article editor or image URL is unavailable.");
+      if(!editor || !publicUrl) throw new Error("Article editor or image URL is unavailable.");
       editor.focus();
       const range = savedRange && editor.contains(savedRange.commonAncestorContainer) ? savedRange : getEditorRange();
       if(!range) throw new Error("Could not place the image in the article.");
-      insertArticleImageAtRange(editor, range, data.publicUrl, file.name || "Article image");
+      insertArticleImageAtRange(editor, range, publicUrl, file.name || "Article image");
     } catch(err) { setError(`Article image upload failed: ${err?.message||"Please try again."}`); }
     finally { setUploadingArticleImage(false); }
+  };
+
+  const uploadArticleFile = async (file) => {
+    if(!file) return;
+    if(file.size > 25*1024*1024){setError("Article files must be 25 MB or smaller.");return;}
+    setUploadingArticleImage(true); setError("");
+    try {
+      const ext=(file.name.split(".").pop()||"bin").toLowerCase().replace(/[^a-z0-9]/g,"") || "bin"; const filename=`${Date.now()}-${Math.random().toString(36).slice(2,9)}.${ext}`;
+      let publicUrl=""; let lastError=null;
+      for (const bucket of ["journal-article","journal-gallery"]) {
+        const path=`${session.user.id}/article-files/${filename}`;
+        const {error:uploadError}=await supabase.storage.from(bucket).upload(path,file,{cacheControl:"3600",upsert:false,contentType:file.type||"application/octet-stream"});
+        if(uploadError){lastError=uploadError;continue;}
+        const {data}=supabase.storage.from(bucket).getPublicUrl(path);
+        if(data?.publicUrl){publicUrl=data.publicUrl;break;}
+      }
+      if(!publicUrl && file.size <= 5 * 1024 * 1024) publicUrl = await fileToDataUrl(file);
+      if(!publicUrl) throw lastError || new Error("Could not create a public article file URL. Check Storage policies or use a file under 5 MB.");
+      const editor=blogContentRef.current; if(!editor) throw new Error("Article editor is unavailable.");
+      editor.focus(); const range=getEditorRange(); if(!range) throw new Error("Could not place the file."); range.deleteContents(); const p=document.createElement("p"); p.innerHTML=`<a href="${publicUrl}" target="_blank" rel="noreferrer noopener" download="${file.name.replace(/"/g,"") }"><strong>Open / download ${file.name}</strong> <span>· ${formatFileSize(file.size)}</span></a>`; range.insertNode(p); const br=document.createElement("p"); br.innerHTML="<br/>"; p.insertAdjacentElement("afterend",br); setBlogContent(editor.innerHTML);
+    } catch(err){setError(`Article file upload failed: ${err?.message||"Please try again."}`);} finally{setUploadingArticleImage(false);}
   };
 
   const handleArticleEditorClick = (e) => {
@@ -2695,6 +2991,7 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
   };
 
   const filteredUsers = users.filter((user) => `${user.username || ""} ${user.full_name || ""} ${user.email || ""}`.toLowerCase().includes(search.toLowerCase()));
+  const filteredFinanceUsers = users.filter((user) => `${user.username || ""} ${user.full_name || ""} ${user.email || ""}`.toLowerCase().includes(financeSearch.trim().toLowerCase()));
   const totalStudyMinutes = records.reduce((sum, item) => sum + Number(item.lecture_minutes || 0), 0);
   const totalQuestions = records.reduce((sum, item) => sum + Number(item.questions_done || 0), 0);
   const activeGoals = goals.filter((goal) => goal.status === "active").length;
@@ -2708,8 +3005,32 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
     const minutes = userRecords.reduce((sum, r) => sum + Number(r.lecture_minutes || 0), 0);
     const questions = userRecords.reduce((sum, r) => sum + Number(r.questions_done || 0), 0);
     const completed = userTasks.filter((t) => t.status === "completed").length;
-    return { days: userRecords.length, hours: `${Math.floor(minutes / 60)}h ${minutes % 60}m`, questions, completed, goals: userGoals.length };
+    const days = [...new Set(userRecords.map(r=>r.record_date).filter(Boolean))].sort();
+    let streak=0, cursor=new Date();
+    const daySet=new Set(days);
+    while(daySet.has(cursor.toISOString().slice(0,10))){ streak++; cursor.setDate(cursor.getDate()-1); }
+    return { days:days.length, hours:`${Math.floor(minutes / 60)}h ${minutes % 60}m`, questions, completed, totalTasks:userTasks.length, goals:userGoals.length, streak };
   };
+
+  const userStateFor = (userId) => userStates.find(s=>s.user_id===userId) || {};
+  const financialSnapshotFor = (userId) => {
+    const state=userStateFor(userId); const money=Array.isArray(state.money)?state.money:[]; const investments=Array.isArray(state.investments)?state.investments:[]; const assets=Array.isArray(state.assets)?state.assets:[]; const liabilities=Array.isArray(state.liabilities)?state.liabilities:[];
+    const income=money.filter(x=>x.type==="income").reduce((a,x)=>a+Number(x.amount||0),0); const expense=money.filter(x=>x.type==="expense").reduce((a,x)=>a+Number(x.amount||0),0); const savings=money.filter(x=>x.type==="saving").reduce((a,x)=>a+Number(x.amount||0),0);
+    const cash=income-expense-savings; const portfolio=investments.reduce((a,x)=>a+Number(x.value||0),0); const other=assets.reduce((a,x)=>a+Number(x.value||0),0); const debt=liabilities.reduce((a,x)=>a+Number(x.value||0),0);
+    return {income,expense,savings,cash,portfolio,other,debt,networth:portfolio+cash+other-debt};
+  };
+  const openUserDetail = (user) => {
+    const state = userStateFor(user.id);
+    setSelectedUser(user);
+    setSelectedUserDetail({ summary:userSummary(user.id), tasks:tasks.filter(t=>t.user_id===user.id), records:records.filter(r=>r.user_id===user.id), goals:goals.filter(g=>g.user_id===user.id), habits:Array.isArray(state.habits)?state.habits:[] });
+  };
+
+  useEffect(() => {
+    if (!selectedUser) return;
+    const state = userStateFor(selectedUser.id);
+    setSelectedUserDetail({ summary:userSummary(selectedUser.id), tasks:tasks.filter(t=>t.user_id===selectedUser.id), records:records.filter(r=>r.user_id===selectedUser.id), goals:goals.filter(g=>g.user_id===selectedUser.id), habits:Array.isArray(state.habits)?state.habits:[] });
+  }, [selectedUser, users, records, tasks, goals, userStates]);
+
 
   return (
     <div className="subpage-shell tasken-app-shell admin-page-shell">
@@ -2719,11 +3040,14 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
         <main className="subpage-content">
           {error && <div className="dashboard-error">{error}</div>}
           <section className="admin-stat-grid"><AdminStat icon={Users} label="Registered accounts" value={users.length} meta={`${activeToday} active today`} /><AdminStat icon={Clock3} label="Total study time" value={`${Math.floor(totalStudyMinutes / 60)}h`} meta={`${totalStudyMinutes % 60}m extra`} /><AdminStat icon={BookOpen} label="Questions solved" value={totalQuestions.toLocaleString()} meta="Across saved records" /><AdminStat icon={Target} label="Active goals" value={activeGoals} meta="Currently in progress" /></section>
-          <section className="admin-layout-grid">
-            <article className="admin-panel send-panel"><div className="panel-head"><div><span className="card-kicker">BROADCAST</span><h2>Send an update</h2><p>Publish a message to everyone or one account.</p></div><Send size={21} /></div><form className="admin-send-form" onSubmit={sendUpdate}><label><span>Audience</span><select value={target} onChange={(e) => setTarget(e.target.value)}><option value="all">Everyone — all registered accounts</option>{users.map((user) => <option key={user.id} value={user.id}>{user.username || user.full_name || "Unnamed candidate"} · {user.email || user.id.slice(0, 8)}</option>)}</select></label><label><span>Message type</span><select value={type} onChange={(e) => setType(e.target.value)}>{UPDATE_TYPES.map((item) => <option key={item}>{item}</option>)}</select></label><label><span>Title</span><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. New TRACKEN update" /></label><label><span>Message</span><textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Write the message your users should see…" /></label><div className="admin-send-footer">{sent ? <span className="success-note"><CheckCircle2 size={15} /> Update sent successfully.</span> : <span>Recipients will see a highlighted notification in Updates.</span>}<button className="primary-cta compact-cta" disabled={sending || !title.trim() || !message.trim()}>{sending ? "Sending…" : "Send update"} <ArrowRight size={16} /></button></div></form></article>
-            <article className="admin-panel users-panel"><div className="panel-head"><div><span className="card-kicker">CANDIDATES</span><h2>Registered accounts</h2><p>Search users and review their summary.</p></div><Users size={21} /></div><div className="admin-search"><Search size={16} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search accounts…" /></div>{loading ? <div className="admin-empty">Loading accounts…</div> : <div className="admin-user-list">{filteredUsers.map((user) => { const summary = userSummary(user.id); return <div className="admin-user-row" key={user.id}><div className="admin-user-avatar">{(user.username || user.full_name || user.email || "U").charAt(0).toUpperCase()}</div><div className="admin-user-main"><strong>{user.username || user.full_name || "Unnamed candidate"}</strong><small>{user.email || user.id}</small></div><div className="admin-user-stats"><span><b>{summary.days}</b> days</span><span><b>{summary.hours}</b> study</span><span><b>{summary.questions}</b> Q</span><span><b>{summary.completed}</b> tasks</span><span><b>{summary.goals}</b> goals</span><label className="admin-badge-control"><small>Badge</small><select value={user.badge || ""} onChange={async e=>{const badge=e.target.value||null; const {data,error}=await supabase.rpc("admin_set_user_badge",{target_user_id:user.id,new_badge:badge}); if(error){setError(error.message);return;} setUsers(current=>current.map(u=>u.id===user.id?{...u,badge:data}:u));}}><option value="">None</option><option value="Perfect">Perfect</option><option value="Smart">Smart</option><option value="Runner">Runner</option></select></label></div></div>; })}{!filteredUsers.length && <div className="admin-empty">No accounts match your search.</div>}</div>}</article>
+          <section className="admin-panel admin-broadcast-panel">
+            <div className="panel-head"><div><span className="card-kicker">BROADCAST</span><h2>Publish an update</h2><p>Send rich content, tables, images or downloadable files to everyone or one account.</p></div><Send size={21}/></div>
+            <form className="admin-send-form" onSubmit={sendUpdate}><label><span>Audience</span><select value={target} onChange={e=>setTarget(e.target.value)}><option value="all">Everyone — all registered accounts</option>{users.map(user=><option key={user.id} value={user.id}>{user.username||user.full_name||"Unnamed user"} · {user.email||user.id.slice(0,8)}</option>)}</select></label><label><span>Message type</span><select value={type} onChange={e=>setType(e.target.value)}>{UPDATE_TYPES.map(item=><option key={item}>{item}</option>)}</select></label><label><span>Title</span><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. TRACKEN 4.2.0 is live"/></label><label><span>Update</span><div ref={el=>setBroadcastEditorRef(el)} className="admin-rich-editor" contentEditable suppressContentEditableWarning data-placeholder="Write an update, paste formatted text or tables, and include images…" onInput={e=>{setBroadcastHtml(e.currentTarget.innerHTML);setMessage(e.currentTarget.innerHTML)}} onPaste={e=>{const items=Array.from(e.clipboardData?.items||[]);const img=items.find(i=>i.type.startsWith("image/"));if(img){e.preventDefault();uploadAdminFile(img.getAsFile(),"broadcast").then(file=>{if(!file)return;document.execCommand("insertHTML",false,`<p><img src="${file.url}" alt="${file.name}" style="max-width:100%;height:auto"/></p>`);setBroadcastHtml(e.currentTarget.innerHTML);setMessage(e.currentTarget.innerHTML)}).catch(err=>setError(err.message));}}}/></label><div className="admin-file-picker"><label className="file-picker-button"><UploadCloud size={16}/> {broadcastFile?"Replace file":"Attach file"}<input type="file" onChange={e=>setBroadcastFile(e.target.files?.[0]||null)}/></label>{broadcastFile&&<span><FileText size={15}/>{broadcastFile.name} · {formatFileSize(broadcastFile.size)} <button type="button" onClick={()=>setBroadcastFile(null)}>Remove</button></span>}</div><div className="admin-send-footer">{sent?<span className="success-note"><CheckCircle2 size={15}/> Update sent successfully.</span>:<span>Supports rich text, pasted tables/images and files up to 25 MB.</span>}<button className="primary-cta compact-cta" disabled={sending||uploadingBroadcastFile||!title.trim()}>{sending||uploadingBroadcastFile?"Publishing…":"Send update"} <ArrowRight size={16}/></button></div></form>
           </section>
 
+          <section className="admin-panel users-panel admin-candidates-panel"><div className="panel-head"><div><span className="card-kicker">CANDIDATES</span><h2>Registered users</h2><p>Review activity, streaks and the work each account has recorded.</p></div><Users size={21}/></div><div className="admin-search"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name or email…"/></div>{loading?<div className="admin-empty">Loading accounts…</div>:<div className="admin-user-list">{filteredUsers.map(user=>{const summary=userSummary(user.id);return <div className="admin-user-row admin-user-row-expanded" key={user.id}><div className="admin-user-avatar">{(user.username||user.full_name||user.email||"U").charAt(0).toUpperCase()}</div><div className="admin-user-main"><strong>{user.username||user.full_name||"Unnamed user"}</strong><small>{user.email||user.id}</small></div><div className="admin-user-stats"><span><b>{summary.streak}</b> streak</span><span><b>{summary.totalTasks}</b> tasks</span><span><b>{summary.completed}</b> done</span><span><b>{summary.hours}</b> study</span><span><b>{summary.goals}</b> goals</span></div><button className="primary-small admin-view-user" onClick={()=>openUserDetail(user)}>View <ChevronRight size={14}/></button></div>})}{!filteredUsers.length&&<div className="admin-empty">No accounts match your search.</div>}</div>}</section>
+
+          {selectedUser && selectedUserDetail && <div className="admin-user-detail-overlay" role="dialog" aria-modal="true" onClick={()=>setSelectedUser(null)}><article className="admin-user-detail" onClick={e=>e.stopPropagation()}><div className="panel-head"><div><span className="card-kicker">USER DETAIL</span><h2>{selectedUser.username||selectedUser.full_name||"Unnamed user"}</h2><p>{selectedUser.email}</p></div><button className="icon-close" onClick={()=>setSelectedUser(null)}><X size={18}/></button></div><div className="admin-detail-metrics"><span><b>{selectedUserDetail.summary.streak}</b> day streak</span><span><b>{selectedUserDetail.summary.totalTasks}</b> tasks</span><span><b>{selectedUserDetail.summary.hours}</b> study</span><span><b>{selectedUserDetail.summary.goals}</b> active goals</span></div><div className="admin-detail-grid"><section><span className="card-kicker">TASKS</span>{selectedUserDetail.tasks.length?selectedUserDetail.tasks.slice(0,30).map(t=><div className="admin-detail-row" key={t.id}><span>{t.title||"Untitled task"}</span><b>{t.status||"pending"}</b></div>):<p className="admin-empty-inline">No tasks recorded.</p>}</section><section><span className="card-kicker">STUDY</span><div className="admin-detail-stat"><b>{selectedUserDetail.summary.hours}</b><small>total recorded study</small></div><div className="admin-detail-stat"><b>{selectedUserDetail.summary.questions}</b><small>questions solved</small></div></section><section><span className="card-kicker">GOALS</span>{selectedUserDetail.goals.length?selectedUserDetail.goals.map(g=><div className="admin-detail-row" key={g.id}><span>{g.title}</span><b>{g.status}</b></div>):<p className="admin-empty-inline">No active goals.</p>}</section><section><span className="card-kicker">HABITS</span>{selectedUserDetail.habits.length?selectedUserDetail.habits.slice(0,20).map((h,i)=><div className="admin-detail-row" key={h.id||i}><span>{h.title||h.name||"Habit"}</span><b>{h.completedToday||h.completed?"Done":"Active"}</b></div>):<p className="admin-empty-inline">No habits recorded.</p>}</section></div></article></div>}
           <section className="admin-panel admin-history-panel">
             <div className="panel-head">
               <div>
@@ -2750,9 +3074,9 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
                     <div className="admin-history-icon"><Megaphone size={17} /></div>
                     <div className="admin-history-main">
                       <div className="admin-history-top"><span>{item.type || "Notice"}</span><time>{new Date(item.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</time></div>
-                      <h3>{item.title}</h3><p>{item.message}</p><small>Sent to <strong>{recipient}</strong></small>
+                      <h3>{item.title}</h3>{(() => { const payload=parseUpdatePayload(item.message); return <><div className="admin-history-rich" dangerouslySetInnerHTML={{__html:normalizeArticleHtml(payload.html)}} />{payload.attachment?.url&&<a className="admin-history-attachment" href={payload.attachment.url} target="_blank" rel="noreferrer noopener"><FileText size={16}/><span>{payload.attachment.name}</span><Download size={15}/></a>}</> })()}<small>Sent to <strong>{recipient}</strong></small>
                     </div>
-                    <div className="admin-row-actions"><button className="ghost-small" onClick={()=>startEditUpdate(item)} title="Edit update"><PenLine size={14}/> Edit</button><button className="danger-small" onClick={()=>deleteUpdate(item.id)} title="Delete update"><Trash2 size={14}/> Delete</button></div>
+                    <div className="admin-history-actions"><button className="ghost-small" onClick={()=>startEditUpdate(item)} title="Edit update"><PenLine size={14}/> Edit</button><button className="danger-small" onClick={()=>deleteUpdate(item.id)} title="Delete update"><Trash2 size={14}/> Delete</button></div>
                   </article>
                 );
               }) : (
@@ -2766,7 +3090,7 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
           </section>
           <section className="admin-panel blog-admin-panel">
              <div className="panel-head"><div><span className="card-kicker">BLOG STUDIO</span><h2>{editingBlogId ? "Edit article" : "Write a new article"}</h2><p>Publish a journal entry that appears on the public Blog page.</p></div><PenLine size={21}/></div>
-             <form className="blog-admin-form" onSubmit={publishBlog}><div className="blog-admin-grid"><label><span>Title</span><input value={blogTitle} onChange={(e)=>setBlogTitle(e.target.value)} placeholder="e.g. How to build a study routine that sticks"/></label><label><span>Slug</span><input value={blogSlug} onChange={(e)=>setBlogSlug(e.target.value)} placeholder="optional-url-slug"/></label><label><span>Category</span><select value={blogCategory} onChange={(e)=>setBlogCategory(e.target.value)}><option>Productivity</option><option>Study tips</option><option>Discipline</option><option>Mindset</option><option>Career</option><option>Product Updates</option></select></label><label><span>Read time</span><input type="number" min="1" max="30" value={blogReadMinutes} onChange={(e)=>setBlogReadMinutes(e.target.value)}/></label></div><label><span>Excerpt</span><textarea value={blogExcerpt} onChange={(e)=>setBlogExcerpt(e.target.value)} placeholder="A short description shown on the Blog page…" rows="3"/></label><label className="article-editor-label"><span>Article content <small>{uploadingArticleImage ? "Uploading image…" : "Paste images directly, then click an image to resize it."}</small></span>{selectedArticleImage && <div className="article-image-toolbar" role="toolbar" aria-label="Resize selected image"><strong>Image size</strong><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(25)}>25%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(50)}>50%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(75)}>75%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(100)}>Full</button></div>}<div ref={blogContentRef} className="article-rich-editor" contentEditable suppressContentEditableWarning onInput={e=>setBlogContent(e.currentTarget.innerHTML)} onClick={handleArticleEditorClick} onPaste={handleArticlePaste} dangerouslySetInnerHTML={{__html:normalizeArticleHtml(blogContent)}} data-placeholder="Write your full journal entry here…" /></label><div className="admin-send-footer">{blogSent?<span className="success-note"><CheckCircle2 size={15}/> Article published.</span>:<span>Published articles appear on the public journal.</span>}<button className="primary-cta compact-cta" disabled={publishingBlog||!blogTitle.trim()||!blogExcerpt.trim()||!blogContent.trim()}>{publishingBlog?"Saving…":editingBlogId?"Save article":"Publish article"} <ArrowRight size={16}/></button></div></form><div className="blog-admin-history"><div className="blog-admin-history-head"><span className="card-kicker">PUBLISHED</span><strong>{blogPosts.length} article{blogPosts.length===1?"":"s"}</strong></div>{blogPosts.slice(0,20).map(post=><div className="blog-admin-row" key={post.id||post.slug}><span className="blog-admin-dot"></span><div className="blog-admin-row-copy"><strong>{post.title}</strong><small>{post.category||"Insights"} · {post.published_at?new Date(post.published_at).toLocaleDateString():"Local draft"}</small></div><div className="admin-row-actions"><button className="ghost-small" onClick={()=>startEditBlog(post)}><PenLine size={14}/> Edit</button><button className="danger-small" onClick={()=>deleteBlog(post.id)}><Trash2 size={14}/> Delete</button></div></div>)}</div>
+             <form className="blog-admin-form" onSubmit={publishBlog}><div className="blog-admin-grid"><label><span>Title</span><input value={blogTitle} onChange={(e)=>setBlogTitle(e.target.value)} placeholder="e.g. How to build a study routine that sticks"/></label><label><span>Slug</span><input value={blogSlug} onChange={(e)=>setBlogSlug(e.target.value)} placeholder="optional-url-slug"/></label><label><span>Category</span><select value={blogCategory} onChange={(e)=>setBlogCategory(e.target.value)}><option>Productivity</option><option>Study tips</option><option>Discipline</option><option>Mindset</option><option>Career</option><option>Product Updates</option></select></label><label><span>Read time</span><input type="number" min="1" max="30" value={blogReadMinutes} onChange={(e)=>setBlogReadMinutes(e.target.value)}/></label></div><label><span>Excerpt</span><textarea value={blogExcerpt} onChange={(e)=>setBlogExcerpt(e.target.value)} placeholder="A short description shown on the Blog page…" rows="3"/></label><div className="article-asset-toolbar"><label className="file-picker-button"><FileText size={16}/> Add image / file<input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" onChange={e=>{const f=e.target.files?.[0]; if(f?.type?.startsWith("image/")) uploadArticleImage(f); else if(f) uploadArticleFile(f); e.target.value="";}}/></label><span>Images appear inline. Other files become clean view/download links.</span></div><label className="article-editor-label"><span>Article content <small>{uploadingArticleImage ? "Uploading asset…" : "Paste images directly, then click an image to resize it."}</small></span>{selectedArticleImage && <div className="article-image-toolbar" role="toolbar" aria-label="Resize selected image"><strong>Image size</strong><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(25)}>25%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(50)}>50%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(75)}>75%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(100)}>Full</button></div>}<div ref={blogContentRef} className="article-rich-editor" contentEditable suppressContentEditableWarning onInput={e=>setBlogContent(e.currentTarget.innerHTML)} onClick={handleArticleEditorClick} onPaste={handleArticlePaste} dangerouslySetInnerHTML={{__html:normalizeArticleHtml(blogContent)}} data-placeholder="Write your full journal entry here…" /></label><div className="admin-send-footer">{blogSent?<span className="success-note"><CheckCircle2 size={15}/> Article published.</span>:<span>Published articles appear on the public journal.</span>}<button className="primary-cta compact-cta" disabled={publishingBlog||!blogTitle.trim()||!blogExcerpt.trim()||!blogContent.trim()}>{publishingBlog?"Saving…":editingBlogId?"Save article":"Publish article"} <ArrowRight size={16}/></button></div></form><div className="blog-admin-history"><div className="blog-admin-history-head"><span className="card-kicker">PUBLISHED</span><strong>{blogPosts.length} article{blogPosts.length===1?"":"s"}</strong></div>{blogPosts.slice(0,20).map(post=><div className="blog-admin-row" key={post.id||post.slug}><span className="blog-admin-dot"></span><div className="blog-admin-row-copy"><strong>{post.title}</strong><small>{post.category||"Insights"} · {post.published_at?new Date(post.published_at).toLocaleDateString():"Local draft"}</small></div><div className="admin-row-actions"><button className="ghost-small" onClick={()=>startEditBlog(post)}><PenLine size={14}/> Edit</button><button className="danger-small" onClick={()=>deleteBlog(post.id)}><Trash2 size={14}/> Delete</button></div></div>)}</div>
            </section>
 
           <section className="admin-panel admin-gallery-panel">
@@ -2785,8 +3109,9 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
           </section>
 
           <section className="admin-panel admin-networth-panel">
-            <div className="panel-head"><div><span className="card-kicker">FINANCIAL OVERVIEW</span><h2>User net worth</h2><p>Registered users and the net-worth information they have added to TRACKEN.</p></div><CircleDollarSign size={21}/></div>
-            <div className="admin-networth-list">{loading ? <div className="admin-empty">Loading financial profiles…</div> : users.length ? filteredUsers.map(user=>{ const snap=user.networth_snapshot || {}; const assets=Array.isArray(snap.assets)?snap.assets:[]; const liabilities=Array.isArray(snap.liabilities)?snap.liabilities:[]; const total=Number(snap.networth_total||0); const assetTotal=Number(snap.investments_value||0)+Number(snap.cash_balance||0)+assets.reduce((sum,x)=>sum+Number(x.value||0),0); const liabilityTotal=liabilities.reduce((sum,x)=>sum+Number(x.value||0),0); return <article className="admin-networth-row" key={`nw-${user.id}`}><div className="admin-user-avatar">{(user.username||user.full_name||user.email||"U").charAt(0).toUpperCase()}</div><div className="admin-networth-user"><strong>{user.username||user.full_name||"Unnamed candidate"}</strong><small>{user.email||user.id}</small></div><div className="admin-networth-metrics"><span><small>Net worth</small><b className={total>=0?"positive":"negative"}>₹{total.toLocaleString("en-IN")}</b></span><span><small>Assets</small><b>₹{assetTotal.toLocaleString("en-IN")}</b></span><span><small>Liabilities</small><b>₹{liabilityTotal.toLocaleString("en-IN")}</b></span><span><small>Updated</small><b>{snap.updated_at?new Date(snap.updated_at).toLocaleDateString("en-IN"):"Not added"}</b></span></div></article>}) : <div className="admin-empty">No registered users yet.</div>}</div>
+            <div className="panel-head"><div><span className="card-kicker">FINANCIAL OVERVIEW</span><h2>User net worth</h2><p>Live financial values calculated from each user's current TRACKEN state.</p></div><CircleDollarSign size={21}/></div>
+            <form className="admin-finance-search" role="search" onSubmit={e=>{e.preventDefault();setFinanceSearch(financeSearchInput.trim())}}><Search size={16}/><input value={financeSearchInput} onChange={e=>setFinanceSearchInput(e.target.value)} placeholder="Search by user name or email…" aria-label="Search financial profiles by name or email"/><button className="admin-finance-search-submit" type="submit"><Search size={14}/> Search</button>{(financeSearch||financeSearchInput)&&<button className="admin-finance-search-clear" type="button" onClick={()=>{setFinanceSearch("");setFinanceSearchInput("")}} aria-label="Clear financial search"><X size={15}/></button>}<span>{filteredFinanceUsers.length} {filteredFinanceUsers.length===1?"profile":"profiles"}</span></form>
+            <div className="admin-networth-list">{loading ? <div className="admin-empty">Loading financial profiles…</div> : users.length ? filteredFinanceUsers.map(user=>{ const fin=financialSnapshotFor(user.id); return <article className="admin-networth-row" key={`nw-${user.id}`}><div className="admin-user-avatar">{(user.username||user.full_name||user.email||"U").charAt(0).toUpperCase()}</div><div className="admin-networth-user"><strong>{user.username||user.full_name||"Unnamed candidate"}</strong><small>{user.email||user.id}</small></div><div className="admin-networth-metrics"><span><small>Net worth</small><b className={fin.networth>=0?"positive":"negative"}>₹{fin.networth.toLocaleString("en-IN")}</b></span><span><small>Cash</small><b>₹{fin.cash.toLocaleString("en-IN")}</b></span><span><small>Portfolio</small><b>₹{fin.portfolio.toLocaleString("en-IN")}</b></span><span><small>Liabilities</small><b>₹{fin.debt.toLocaleString("en-IN")}</b></span></div></article>}) : <div className="admin-empty">No registered users yet.</div>}{users.length && !filteredFinanceUsers.length ? <div className="admin-empty">No financial profiles match “{financeSearch}”.</div> : null}</div>
           </section>
         </main>
       </div>
@@ -2991,7 +3316,21 @@ function GoalsPage({ session, goals, setGoals, tasks, taskMeta, setTaskMeta, the
           </section>
         )}
 
-        <section className="goal-automation-card tracker-large-card">
+        <section className="goals-list-section">
+          <div className="goals-section-head"><div><span className="card-kicker">ACTIVE GOALS</span><h2>Your targets</h2></div><span className="goal-count">{activeGoals.length} active</span></div>
+          {activeGoals.length === 0 ? (
+            <div className="goals-empty"><Target size={28} /><h3>Nothing on the board yet.</h3><p>Add your first goal and give your daily work a destination.</p><button className="secondary-cta" onClick={() => { resetForm(); setShowForm(true); }}>Create your first goal <ArrowRight size={16} /></button></div>
+          ) : (
+            <div className="goal-card-grid">
+              {activeGoals.map((goal) => {
+                const p = progress(goal); const stats = getTaskStats(goal.id);
+                return <GoalCard key={goal.id} goal={goal} progress={p} stats={stats} onEdit={() => openEdit(goal)} onDelete={() => deleteGoal(goal)} onComplete={() => completeGoal(goal)} />;
+              })}
+            </div>
+          )}
+        </section>
+
+                <section className="goal-automation-card tracker-large-card">
           <div className="panel-heading"><div><span className="card-kicker">GOAL AUTOMATION · 02</span><h2>Turn goals into planned action.</h2><p className="tracker-copy">Choose an active goal once. TRACKEN can create linked action tasks on a daily, weekday, weekly or monthly rhythm until the goal deadline.</p></div><Zap size={20}/></div>
           <div className="goal-automation-form-grid">
             <select value={goalAutomationGoal} onChange={e=>{const id=e.target.value;setGoalAutomationGoal(id);const g=goals.find(x=>String(x.id)===String(id));if(g&&!goalAutomationTitle)setGoalAutomationTitle(`Work on ${g.title}`);}}>
@@ -3009,20 +3348,6 @@ function GoalsPage({ session, goals, setGoals, tasks, taskMeta, setTaskMeta, the
             {goalAutomationRules.map(rule=>{const g=goals.find(x=>String(x.id)===String(rule.goalId));return <div className={`automation-rule ${rule.enabled?"active":"paused"}`} key={rule.id}><div className="automation-rule-icon"><Target size={16}/></div><div className="automation-rule-main"><b>{rule.title}</b><small>{g?.title||"Goal unavailable"} · {({daily:"Every day",weekdays:"Every weekday",weekly:"Every week",monthly:"Every month"}[rule.frequency]||"Scheduled")} · until {rule.endDate||g?.target_date||"goal deadline"}</small></div><span className="automation-status">{rule.enabled?"ACTIVE":"PAUSED"}</span><button className="ghost-small" onClick={()=>toggleGoalAutomation(rule.id)}>{rule.enabled?"Pause":"Resume"}</button><button className="ghost-small danger-ghost" onClick={()=>deleteGoalAutomation(rule.id)}><Trash2 size={14}/></button></div>})}
             {!goalAutomationRules.length&&<div className="automation-empty"><Zap size={22}/><div><b>No goal automations yet.</b><small>Connect a goal to a repeatable action and TRACKEN will handle the task creation.</small></div></div>}
           </div>
-        </section>
-
-        <section className="goals-list-section">
-          <div className="goals-section-head"><div><span className="card-kicker">ACTIVE GOALS</span><h2>Your targets</h2></div><span className="goal-count">{activeGoals.length} active</span></div>
-          {activeGoals.length === 0 ? (
-            <div className="goals-empty"><Target size={28} /><h3>Nothing on the board yet.</h3><p>Add your first goal and give your daily work a destination.</p><button className="secondary-cta" onClick={() => { resetForm(); setShowForm(true); }}>Create your first goal <ArrowRight size={16} /></button></div>
-          ) : (
-            <div className="goal-card-grid">
-              {activeGoals.map((goal) => {
-                const p = progress(goal); const stats = getTaskStats(goal.id);
-                return <GoalCard key={goal.id} goal={goal} progress={p} stats={stats} onEdit={() => openEdit(goal)} onDelete={() => deleteGoal(goal)} onComplete={() => completeGoal(goal)} />;
-              })}
-            </div>
-          )}
         </section>
 
         {completedGoals.length > 0 && (
@@ -3086,6 +3411,10 @@ function ProfilePage({ session, profile, setProfile, theme, toggleTheme, onBack,
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
+  const [broadcastEditorRef, setBroadcastEditorRef] = useState(null);
+  const [broadcastFile, setBroadcastFile] = useState(null);
+  const [broadcastHtml, setBroadcastHtml] = useState("");
+  const [uploadingBroadcastFile, setUploadingBroadcastFile] = useState(false);
   const [error, setError] = useState("");
   const [showFactoryReset, setShowFactoryReset] = useState(false);
   const [resetting, setResetting] = useState(false);
