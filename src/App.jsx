@@ -274,7 +274,7 @@ function App() {
   }
 
   if (["about", "privacy", "terms", "cookies", "disclaimer", "advertising"].includes(publicPage)) {
-    return <TaskenErrorBoundary><LegalPage page={publicPage} theme={theme} toggleTheme={toggleTheme} onBack={() => setPublicPage("home")} onLogin={() => setAuthView("login")} onNavigate={setPublicPage} /></TaskenErrorBoundary>;
+    return <TaskenErrorBoundary><LegalPage page={publicPage} theme={theme} toggleTheme={toggleTheme} onBack={() => setPublicPage("home")} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => setPublicPage("contact")} onNavigate={setPublicPage} /></TaskenErrorBoundary>;
   }
 
   if (publicPage === "contact") {
@@ -285,7 +285,9 @@ function App() {
           toggleTheme={toggleTheme}
           onBack={() => setPublicPage("home")}
           onLogin={() => setAuthView("login")}
+          onRegister={() => setAuthView("register")}
           onBlog={() => setPublicPage("blog")}
+          onContact={() => setPublicPage("contact")}
           onNavigate={setPublicPage}
         />
       </TaskenErrorBoundary>
@@ -309,7 +311,6 @@ function App() {
 
 
 function LandingHome({ theme, toggleTheme, onLogin, onRegister, onBlog, onContact, onNavigate }) {
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [activeDemo, setActiveDemo] = useState("Overview");
   const heroVisualRef = useRef(null);
   const demo = {
@@ -355,18 +356,15 @@ function LandingHome({ theme, toggleTheme, onLogin, onRegister, onBlog, onContac
 
   return (
     <div className="landing-v3 landing-v4">
-      <header className="landing-nav landing-nav-v3 landing-nav-v4">
-        <button className="landing-brand" onClick={() => window.scrollTo({top:0, behavior:"smooth"})} aria-label="TRACKEN home">TRACKEN<span>.</span><small>PERSONAL PROGRESS OS</small></button>
-        <nav className={`landing-nav-links ${mobileNavOpen ? "is-open" : ""}`} aria-label="Primary navigation">
-          <a href="#features" onClick={() => setMobileNavOpen(false)}>Features</a><a href="#how-it-works" onClick={() => setMobileNavOpen(false)}>How It Works</a><button onClick={() => {setMobileNavOpen(false);onNavigate("about")}}>About</button><button onClick={() => {setMobileNavOpen(false);onContact()}}>Contact</button>
-        </nav>
-        <div className="landing-actions landing-actions-v4">
-          <button className="landing-mobile-menu" onClick={() => setMobileNavOpen(v=>!v)} aria-label="Toggle navigation" aria-expanded={mobileNavOpen}>{mobileNavOpen?<X size={19}/>:<Menu size={19}/>}</button>
-          <button className="landing-theme" onClick={toggleTheme} aria-label="Toggle theme">{theme==="light"?<Moon size={17}/>:<Sun size={17}/>}</button>
-          <button className="landing-login" onClick={onLogin}>Login</button>
-          <button className="landing-signup" onClick={onRegister}>Get Started <ArrowRight size={16}/></button>
-        </div>
-      </header>
+      <PublicHeader
+        theme={theme}
+        toggleTheme={toggleTheme}
+        onLogin={onLogin}
+        onRegister={onRegister}
+        onBlog={onBlog}
+        onContact={onContact}
+        onNavigate={onNavigate}
+      />
 
       <main>
         <section className="home-hero home-hero-v4">
@@ -453,7 +451,7 @@ function LandingHome({ theme, toggleTheme, onLogin, onRegister, onBlog, onContac
         <section className="landing-final-cta home-final home-final-v4 home-reveal"><div className="home-final-orb" aria-hidden="true"></div><div className="landing-section-kicker">START WITH ONE THING</div><h2>Your progress<br/><em>deserves to be seen.</em></h2><p>You do not need to organise your whole life on day one. Start with the part you want to make clearer — then build from there.</p><button className="landing-primary home-primary" onClick={onRegister}>Start Tracking <ArrowRight size={18}/></button><small>No complicated setup. Just a clearer place to begin.</small></section>
       </main>
 
-      <footer className="landing-footer-v2 landing-footer-v4"><div><div className="landing-footer-brand">TRACKEN<span>.</span></div><small>PERSONAL PROGRESS OS</small><p>Track what matters. Understand your patterns. Keep moving.</p></div><div className="landing-footer-links"><a href="#features">Features</a><button onClick={()=>onNavigate("about")}>About</button><button onClick={onContact}>Contact</button><button onClick={onBlog}>Journal</button></div><div className="landing-footer-policies"><button onClick={()=>onNavigate("privacy")}>Privacy Policy</button><button onClick={()=>onNavigate("terms")}>Terms</button><button onClick={()=>onNavigate("disclaimer")}>Disclaimer</button><button onClick={()=>onNavigate("cookies")}>Cookie Policy</button><button onClick={()=>onNavigate("advertising")}>Advertising</button></div><div className="landing-footer-bottom"><span>TRACKEN by MMD</span><span>Personal Progress OS</span></div></footer>
+      <footer className="landing-footer-v2 landing-footer-v4"><div><div className="landing-footer-brand">TRACKEN<span>.</span></div><small>PERSONAL PROGRESS OS</small><p>Track what matters. Understand your patterns. Keep moving.</p></div><div className="landing-footer-links"><a href="#features">Features</a><button onClick={()=>onNavigate("about")}>About</button><button onClick={onContact}>Contact</button><button onClick={onBlog}>Blog</button></div><div className="landing-footer-policies"><button onClick={()=>onNavigate("privacy")}>Privacy Policy</button><button onClick={()=>onNavigate("terms")}>Terms</button><button onClick={()=>onNavigate("disclaimer")}>Disclaimer</button><button onClick={()=>onNavigate("cookies")}>Cookie Policy</button><button onClick={()=>onNavigate("advertising")}>Advertising</button></div><div className="landing-footer-bottom"><span>TRACKEN by MMD</span><span>Personal Progress OS</span></div></footer>
     </div>
   );
 }
@@ -521,20 +519,76 @@ function DashboardPreview() {
   </div>;
 }
 
-function ContactPage({ theme, toggleTheme, onBack, onLogin, onBlog, onNavigate }) {
+function PublicHeader({ theme, toggleTheme, onLogin, onRegister, onBlog, onContact, onNavigate }) {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  const goHomeSection = (section) => {
+    setMobileNavOpen(false);
+    if (onNavigate) onNavigate("home");
+    window.setTimeout(() => {
+      const target = document.getElementById(section);
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      else window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 0);
+  };
+
+  const goBlog = () => {
+    setMobileNavOpen(false);
+    onBlog?.();
+  };
+
+  const goContact = () => {
+    setMobileNavOpen(false);
+    onContact?.();
+  };
+
+  const goLogin = () => {
+    setMobileNavOpen(false);
+    onLogin?.();
+  };
+
+  const goRegister = () => {
+    setMobileNavOpen(false);
+    onRegister?.();
+  };
+
+  return (
+    <header className="landing-nav landing-nav-v3 landing-nav-v4 public-shared-header">
+      <button className="landing-brand" onClick={() => { setMobileNavOpen(false); onNavigate?.("home"); window.scrollTo({ top: 0, behavior: "smooth" }); }} aria-label="TRACKEN home">
+        TRACKEN<span>.</span><small>PERSONAL PROGRESS OS</small>
+      </button>
+      <nav className={`landing-nav-links ${mobileNavOpen ? "is-open" : ""}`} aria-label="Primary navigation">
+        <button onClick={() => goHomeSection("features")}>Features</button>
+        <button onClick={() => goHomeSection("how-it-works")}>How It Works</button>
+        <button onClick={goBlog}>Blog</button>
+        <button onClick={goContact}>Contact</button>
+      </nav>
+      <div className="landing-actions landing-actions-v4">
+        <button className="landing-mobile-menu" onClick={() => setMobileNavOpen(v => !v)} aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"} aria-expanded={mobileNavOpen}>{mobileNavOpen ? <X size={19}/> : <Menu size={19}/>}</button>
+        <button className="landing-theme" onClick={toggleTheme} aria-label="Toggle theme" title={theme === "light" ? "Dark mode" : "Light mode"}>{theme === "light" ? <Moon size={17}/> : <Sun size={17}/>}</button>
+        <button className="landing-login" onClick={goLogin}>Login</button>
+        <button className="landing-signup" onClick={goRegister}>Get Started <ArrowRight size={16}/></button>
+      </div>
+    </header>
+  );
+}
+
+function ContactPage({ theme, toggleTheme, onBack, onLogin, onRegister, onBlog, onContact, onNavigate }) {
   const [sent, setSent] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
   const submit = (event) => { event.preventDefault(); setSent(true); };
   return (
     <div className="contact-page-shell">
-      <header className="topbar contact-topbar">
-        <button className="brand brand-button" onClick={onBack} aria-label="TRACKEN home">TRACKEN<span>.</span></button>
-        <nav className="nav-links" aria-label="Primary navigation">
-          <button onClick={onBack}>Features</button><button onClick={onBlog}>Blog</button><button className="nav-link-button active" type="button">Get in Touch</button>
-        </nav>
-        <div className="nav-actions"><button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode">{theme === "light" ? <Moon size={18} /> : <Sun size={18} />}<span>{theme === "light" ? "Dark mode" : "Light mode"}</span></button><button className="login-button" onClick={onLogin}>Login</button></div>
-      </header>
+      <PublicHeader
+        theme={theme}
+        toggleTheme={toggleTheme}
+        onLogin={onLogin}
+        onRegister={onRegister}
+        onBlog={onBlog}
+        onContact={onContact}
+        onNavigate={onNavigate}
+      />
       <main className="contact-page-main">
         <section className="contact-page-hero contact-page-hero-premium">
           <div className="contact-page-copy">
@@ -605,42 +659,32 @@ function BlogPage({theme,toggleTheme,onBack,onLogin,onRegister,onContact,onNavig
 
   return (
     <div className="public-page-shell journal-page-shell">
-      <header className="landing-nav journal-nav">
-        <button className="landing-brand" onClick={onBack} aria-label="TRACKEN home">
-          TRACKEN<span>.</span><small>PERSONAL PROGRESS OS</small>
-        </button>
-        <nav className={`landing-nav-links ${mobileNavOpen ? "is-open" : ""}`} aria-label="Primary navigation">
-          <a href="#journal-intro" onClick={(e)=>{e.preventDefault();setMobileNavOpen(false);window.scrollTo({top:0,behavior:"smooth"});}}>What is TRACKEN?</a>
-          <button className="active" onClick={()=>{setMobileNavOpen(false);window.scrollTo({top:0,behavior:"smooth"})}}>Journal</button>
-          <button onClick={()=>{setMobileNavOpen(false);onContact()}}>Get in Touch</button>
-        </nav>
-        <div className="landing-actions">
-          <button className="landing-mobile-menu" onClick={()=>setMobileNavOpen(v=>!v)} aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"} aria-expanded={mobileNavOpen}>{mobileNavOpen ? <X size={19}/> : <Menu size={19}/>}</button>
-          <button className="landing-theme" onClick={toggleTheme} aria-label="Toggle dark mode" title={theme === "light" ? "Dark mode" : "Light mode"}>
-            {theme === "light" ? <Moon size={17}/> : <Sun size={17}/>}
-          </button>
-          <button className="landing-login" onClick={onLogin}>Log in</button>
-          <button className="landing-signup" onClick={onRegister}>Get started <ArrowRight size={16}/></button>
-        </div>
-      </header>
-
+      <PublicHeader
+        theme={theme}
+        toggleTheme={toggleTheme}
+        onLogin={onLogin}
+        onRegister={onRegister}
+        onBlog={() => {}}
+        onContact={onContact}
+        onNavigate={onNavigate}
+      />
       <main className="journal-main" id="journal-intro">
         <section className="journal-hero-clean">
           <div className="journal-hero-copy">
-            <span className="eyebrow"><span></span> TRACKEN JOURNAL</span>
+            <span className="eyebrow"><span></span> TRACKEN BLOG</span>
             <h1>Ideas, systems &amp;<br/><em>better days.</em></h1>
             <p>A quiet place for practical writing on study, discipline, focus, planning and the systems that make progress easier to see.</p>
           </div>
           <div className="journal-hero-mark">
             <BookOpen size={25}/>
-            <span>THE JOURNAL</span>
+            <span>THE BLOG</span>
             <strong>{posts.length}</strong>
             <small>{posts.length===1 ? "published entry" : "published entries"}</small>
           </div>
         </section>
 
         <section className="journal-gallery-entry">
-          <div><span className="card-kicker">VISUAL JOURNAL</span><h2>Gallery of TRACKEN</h2><p>Moments, product visuals and images shared directly from the TRACKEN studio.</p></div>
+          <div><span className="card-kicker">VISUAL BLOG</span><h2>Gallery of TRACKEN</h2><p>Moments, product visuals and images shared directly from the TRACKEN studio.</p></div>
           <button className="primary-cta" onClick={()=>{setGalleryIndex(0);setGalleryOpen(true)}}><ImagePlus size={17}/> View Gallery <ArrowRight size={16}/></button>
         </section>
 
@@ -655,7 +699,7 @@ function BlogPage({theme,toggleTheme,onBack,onLogin,onRegister,onContact,onNavig
             <div className="journal-gallery-modal" onClick={(e) => e.stopPropagation()}>
               <div className="journal-gallery-head">
                 <div>
-                  <span className="card-kicker">TRACKEN JOURNAL</span>
+                  <span className="card-kicker">TRACKEN BLOG</span>
                   <h2>Gallery of TRACKEN</h2>
                   <p>
                     {galleryImages.length}{" "}
@@ -763,21 +807,21 @@ function BlogPage({theme,toggleTheme,onBack,onLogin,onRegister,onContact,onNavig
         {posts.length>0 && <div className="journal-filter-row">{categories.map(c=><button key={c} className={activeCategory===c?"active":""} onClick={()=>setActiveCategory(c)}>{c}</button>)}</div>}
 
         {loading ? (
-          <section className="journal-empty-state journal-loading-state"><div className="journal-empty-icon"><BookOpen size={23}/></div><span className="card-kicker">LOADING JOURNAL</span><h2>Preparing your latest entries.</h2><p>Just a moment.</p></section>
+          <section className="journal-empty-state journal-loading-state"><div className="journal-empty-icon"><BookOpen size={23}/></div><span className="card-kicker">LOADING BLOG</span><h2>Preparing your latest entries.</h2><p>Just a moment.</p></section>
         ) : visible.length===0 ? (
           <section className="journal-empty-state">
             <div className="journal-empty-icon"><PenLine size={23}/></div>
-            <span className="card-kicker">YOUR JOURNAL</span>
+            <span className="card-kicker">YOUR BLOG</span>
             <h2>Your first entry starts here.</h2>
-            <p>No articles have been published yet. Write your first journal entry from the TRACKEN Admin portal and it will appear here automatically.</p>
-            <button className="primary-cta" onClick={onLogin}>Write a journal entry <ArrowRight size={16}/></button>
+            <p>No articles have been published yet. Write your first blog article from the TRACKEN Admin portal and it will appear here automatically.</p>
+            <button className="primary-cta" onClick={onLogin}>Write a blog article <ArrowRight size={16}/></button>
           </section>
         ) : (
           <section className="journal-grid">
             {visible.map((post,index)=><article className={`journal-card ${index===0?"featured":""}`} key={post.id||post.slug} role="button" tabIndex={0} onClick={()=>onOpenPost(post)} onKeyDown={(e)=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onOpenPost(post);}}}>
               <div className="journal-card-art"><span>{String(index+1).padStart(2,"0")}</span><BookOpen size={28}/></div>
               <div className="journal-card-content">
-                <div className="journal-meta"><span>{post.category||"Journal"}</span><time>{post.published_at?new Date(post.published_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):"Published"}</time></div>
+                <div className="journal-meta"><span>{post.category||"Blog"}</span><time>{post.published_at?new Date(post.published_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):"Published"}</time></div>
                 <h2>{post.title}</h2>
                 <p>{post.excerpt}</p>
                 <div className="journal-card-footer"><span>{post.read_minutes||5} min read</span><ArrowRight size={16}/></div>
@@ -796,29 +840,23 @@ function BlogPostPage({post,theme,toggleTheme,onBack,onLogin,onRegister,onContac
   const published = post?.published_at ? new Date(post.published_at).toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : "Published";
   return (
     <div className="public-page-shell journal-post-shell">
-      <header className="landing-nav journal-nav">
-        <button className="landing-brand" onClick={onBack} aria-label="TRACKEN home">
-          TRACKEN<span>.</span><small>PERSONAL PROGRESS OS</small>
-        </button>
-        <nav className="landing-nav-links" aria-label="Primary navigation">
-          <button onClick={()=>onNavigate("home")}>What is TRACKEN?</button>
-          <button className="active" onClick={onBack}>Journal</button>
-          <button onClick={onContact}>Get in Touch</button>
-        </nav>
-        <div className="landing-actions">
-          <button className="landing-theme" onClick={toggleTheme} aria-label="Toggle dark mode" title={theme === "light" ? "Dark mode" : "Light mode"}>{theme === "light" ? <Moon size={17}/> : <Sun size={17}/>}</button>
-          <button className="landing-login" onClick={onLogin}>Log in</button>
-          <button className="landing-signup" onClick={onRegister}>Get started <ArrowRight size={16}/></button>
-        </div>
-      </header>
+      <PublicHeader
+        theme={theme}
+        toggleTheme={toggleTheme}
+        onLogin={onLogin}
+        onRegister={onRegister}
+        onBlog={onBack}
+        onContact={onContact}
+        onNavigate={onNavigate}
+      />
       <main className="journal-post-main">
-        <button className="journal-back-link" onClick={onBack}><ArrowLeft size={15}/> Back to Journal</button>
+        <button className="journal-back-link" onClick={onBack}><ArrowLeft size={15}/> Back to Blog</button>
         <article className="journal-post-article">
           <header className="journal-post-header">
-            <div className="journal-meta"><span>{post?.category || "Journal"}</span><time>{published}</time></div>
-            <h1>{post?.title || "Journal entry"}</h1>
+            <div className="journal-meta"><span>{post?.category || "Blog"}</span><time>{published}</time></div>
+            <h1>{post?.title || "Blog entry"}</h1>
             {post?.excerpt && <p className="journal-post-excerpt">{post.excerpt}</p>}
-            <div className="journal-post-meta"><span>{post?.read_minutes || 5} min read</span><span>TRACKEN JOURNAL</span></div>
+            <div className="journal-post-meta"><span>{post?.read_minutes || 5} min read</span><span>TRACKEN BLOG</span></div>
           </header>
           <div className="journal-post-body" dangerouslySetInnerHTML={{__html: articleHtml}} />
         </article>
@@ -828,16 +866,24 @@ function BlogPostPage({post,theme,toggleTheme,onBack,onLogin,onRegister,onContac
   );
 }
 
-function LegalPage({page,theme,toggleTheme,onBack,onLogin,onNavigate}) {
+function LegalPage({page,theme,toggleTheme,onBack,onLogin,onRegister,onNavigate}) {
   const content={
     about:{icon:Heart,kicker:"ABOUT TRACKEN",title:"A calmer way to build better study days.",intro:"TRACKEN is a focused student productivity platform built around tasks, study records, goals, streaks and measurable progress.",sections:[["Our approach","We believe study systems should reduce friction, not add another layer of complexity. TRACKEN brings the work, the record and the bigger picture into one command center."],["Built for consistency","The product is designed to help students turn daily effort into visible momentum through clear tasks, honest records and meaningful goals."],["Our promise","We aim to keep TRACKEN useful, transparent and respectful of the people who use it."]]},
     privacy:{icon:LockKeyhole,kicker:"PRIVACY POLICY",title:"Your information deserves clarity.",intro:"This page explains, in plain language, how TRACKEN handles information used to provide the service.",sections:[["Information we collect","TRACKEN may collect account details, profile information, tasks, goals, study records and messages you choose to submit so the service can provide your requested features."],["How information is used","Information is used to authenticate your account, save your progress, provide dashboard features, communicate important service updates and improve reliability."],["Security","We use account authentication and access controls to protect stored data. No online service can promise absolute security, so please use a strong, unique password."],["Your choices","You can update profile information through TRACKEN and contact us if you have questions about your data or privacy."]]},
     terms:{icon:Scale,kicker:"TERMS & CONDITIONS",title:"Use TRACKEN responsibly.",intro:"These terms describe the basic rules for using TRACKEN and its study-management features.",sections:[["Acceptable use","Use TRACKEN for lawful personal productivity and study planning. Do not attempt to disrupt the service, access another person's account or misuse administrative functionality."],["Your content","You remain responsible for information, messages and content you enter into TRACKEN. Keep your credentials private."],["Service changes","Features may evolve as TRACKEN develops. We may update, improve or retire features when necessary to maintain the service."],["No guarantee of outcomes","TRACKEN is a productivity tool. It can help you organize and measure effort, but academic or career outcomes depend on many factors outside the service."]]},
     cookies:{icon:Cookie,kicker:"COOKIE POLICY",title:"A transparent approach to cookies.",intro:"TRACKEN may use browser storage and similar technologies to remember settings and keep the experience working smoothly.",sections:[["Essential storage","We may use local browser storage for preferences such as theme selection and interface state. These are used to make the product behave as expected."],["Authentication","Authentication and session handling are provided through our authentication infrastructure so you can remain securely signed in."],["Analytics and advertising","If analytics or advertising technologies are introduced, this policy will be updated with relevant information about their purpose and controls."],["Your control","You can manage cookies and browser storage through your browser settings. Disabling some storage may affect functionality."]]},
     disclaimer:{icon:Info,kicker:"DISCLAIMER",title:"TRACKEN helps you track the work.",intro:"TRACKEN provides productivity and study-tracking tools. It does not provide professional academic, medical, legal or financial advice.",sections:[["Educational use","Study statistics, scores and insights are organizational tools and should not be treated as guarantees of exam performance or admissions outcomes."],["Third-party services","TRACKEN may rely on external infrastructure and services. Their availability can affect parts of the experience."],["Advertising disclosure","Where advertising is displayed, it may be provided by third-party advertising services. Sponsored content does not determine TRACKEN's independent product guidance."]]},
-    advertising:{icon:Megaphone,kicker:"ADVERTISING & ADSENSE",title:"A clear approach to advertising.",intro:"TRACKEN may use advertising to support the continued development and availability of the service. We aim to keep advertising clearly separated from product functionality and editorial content.",sections:[["Advertising on TRACKEN","If advertising is enabled, advertisements may be supplied by third-party advertising partners such as Google AdSense. The presence of an advertisement does not mean TRACKEN endorses every product or service shown."],["How advertising works","Third-party advertising services may use information such as browser context, device information or consent choices to deliver and measure advertisements, subject to the provider's policies and applicable controls."],["Editorial independence","TRACKEN's study guidance, product information and journal content are created independently of advertising placement. Advertisers do not control our product decisions or editorial direction."],["Your choices","Where required, TRACKEN will provide appropriate consent and privacy controls. You can also manage relevant advertising preferences through your browser, device and applicable advertising-provider controls."]]}
+    advertising:{icon:Megaphone,kicker:"ADVERTISING & ADSENSE",title:"A clear approach to advertising.",intro:"TRACKEN may use advertising to support the continued development and availability of the service. We aim to keep advertising clearly separated from product functionality and editorial content.",sections:[["Advertising on TRACKEN","If advertising is enabled, advertisements may be supplied by third-party advertising partners such as Google AdSense. The presence of an advertisement does not mean TRACKEN endorses every product or service shown."],["How advertising works","Third-party advertising services may use information such as browser context, device information or consent choices to deliver and measure advertisements, subject to the provider's policies and applicable controls."],["Editorial independence","TRACKEN's study guidance, product information and blog content are created independently of advertising placement. Advertisers do not control our product decisions or editorial direction."],["Your choices","Where required, TRACKEN will provide appropriate consent and privacy controls. You can also manage relevant advertising preferences through your browser, device and applicable advertising-provider controls."]]}
   }[page]||{}; const Icon=content.icon||Info;
-  return <div className="public-page-shell legal-page-shell"><header className="topbar public-inner-topbar"><button className="brand brand-button" onClick={onBack}>TRACKEN<span>.</span></button><nav className="nav-links"><button onClick={onBack}>Features</button><button onClick={()=>onNavigate("blog")}>Blog</button><button onClick={()=>onNavigate("contact")}>Get in Touch</button></nav><div className="nav-actions"><button className="dashboard-theme-button theme-control" onClick={toggleTheme} aria-label="Toggle dark mode" title="Toggle dark mode">{theme==="light"?<Moon size={18}/>:<Sun size={18}/>}<span>{theme==="light"?"Dark mode":"Light mode"}</span></button><button className="login-button" onClick={onLogin}>Login</button></div></header><main className="legal-main"><div className="legal-hero"><div className="legal-icon"><Icon size={24}/></div><div className="eyebrow"><span></span> {content.kicker}</div><h1>{content.title}</h1><p>{content.intro}</p></div><div className="legal-body">{content.sections.map(([h,t])=><section key={h}><h2>{h}</h2><p>{t}</p></section>)}</div></main><PublicFooter onNavigate={onNavigate}/></div>;
+  return <div className="public-page-shell legal-page-shell"><PublicHeader
+  theme={theme}
+  toggleTheme={toggleTheme}
+  onLogin={onLogin}
+  onRegister={onRegister}
+  onBlog={() => onNavigate("blog")}
+  onContact={() => onNavigate("contact")}
+  onNavigate={onNavigate}
+/><main className="legal-main"><div className="legal-hero"><div className="legal-icon"><Icon size={24}/></div><div className="eyebrow"><span></span> {content.kicker}</div><h1>{content.title}</h1><p>{content.intro}</p></div><div className="legal-body">{content.sections.map(([h,t])=><section key={h}><h2>{h}</h2><p>{t}</p></section>)}</div></main><PublicFooter onNavigate={onNavigate}/></div>;
 }
 function PublicFooter({onNavigate}) { return <footer className="footer premium-footer public-footer"><div className="footer-brand-block"><div className="footer-brand">TRACKEN<span>.</span></div><div className="footer-byline">by MMD</div><p>© 2026 TRACKEN. Built for better study days.</p></div><div className="footer-links footer-policy-links"><button onClick={()=>onNavigate("about")}>About</button><button onClick={()=>onNavigate("privacy")}>Privacy Policy</button><button onClick={()=>onNavigate("terms")}>Terms &amp; Conditions</button><button onClick={()=>onNavigate("cookies")}>Cookie Policy</button><button onClick={()=>onNavigate("disclaimer")}>Disclaimer</button><button onClick={()=>onNavigate("advertising")}>Advertising</button></div><div className="footer-adsense-note"><ShieldCheck size={15}/><span>Privacy-first experience with clear advertising and content disclosures.</span></div></footer>; }
 
@@ -1313,7 +1359,13 @@ function Dashboard({ session, theme, toggleTheme, onLogout }) {
   }));
   const addHabit = () => { const title = window.prompt("Habit name"); if (title?.trim()) setHabits((c) => [...c, { id: crypto.randomUUID(), title: title.trim(), startDate: todayHabitKey, durationDays: 30, scheduleType:"daily", scheduleDays:[0,1,2,3,4,5,6], completedDates: [] }]); };
   const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  const toggleSidebar = () => setSidebarCollapsed((c) => { const n = !c; localStorage.setItem("tasken-sidebar-collapsed", String(n)); return n; });
+  const toggleSidebar = () => {
+    if (window.matchMedia("(max-width: 650px)").matches) {
+      setMobileSidebarOpen(false);
+      return;
+    }
+    setSidebarCollapsed((c) => { const n = !c; localStorage.setItem("tasken-sidebar-collapsed", String(n)); return n; });
+  };
   const handleLogout = async () => { setError(""); const { error: logoutError } = await supabase.auth.signOut(); if (logoutError) return setError(logoutError.message); onLogout?.(); };
   if (showProfile) return <ProfilePage session={session} profile={profile} setProfile={setProfile} theme={theme} toggleTheme={toggleTheme} onBack={() => setShowProfile(false)} />;
   if (showAnalytics) return <AnalyticsPage session={session} theme={theme} toggleTheme={toggleTheme} history={history} tasks={tasks} goals={goals} onBack={() => setShowAnalytics(false)} />;
@@ -2731,7 +2783,7 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
         const dataUrl = await fileToDataUrl(file);
         if (dataUrl) return {url:dataUrl,name:file.name,size:file.size,type:file.type||"application/octet-stream",embedded:true};
       }
-      throw lastError || new Error("Could not upload the file. Check the Storage policies for the journal-article bucket.");
+      throw lastError || new Error("Could not upload the file. Check the Storage policies for the article bucket.");
     } finally {
       setUploadingBroadcastFile(false);
     }
@@ -3089,12 +3141,12 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
             </div>
           </section>
           <section className="admin-panel blog-admin-panel">
-             <div className="panel-head"><div><span className="card-kicker">BLOG STUDIO</span><h2>{editingBlogId ? "Edit article" : "Write a new article"}</h2><p>Publish a journal entry that appears on the public Blog page.</p></div><PenLine size={21}/></div>
-             <form className="blog-admin-form" onSubmit={publishBlog}><div className="blog-admin-grid"><label><span>Title</span><input value={blogTitle} onChange={(e)=>setBlogTitle(e.target.value)} placeholder="e.g. How to build a study routine that sticks"/></label><label><span>Slug</span><input value={blogSlug} onChange={(e)=>setBlogSlug(e.target.value)} placeholder="optional-url-slug"/></label><label><span>Category</span><select value={blogCategory} onChange={(e)=>setBlogCategory(e.target.value)}><option>Productivity</option><option>Study tips</option><option>Discipline</option><option>Mindset</option><option>Career</option><option>Product Updates</option></select></label><label><span>Read time</span><input type="number" min="1" max="30" value={blogReadMinutes} onChange={(e)=>setBlogReadMinutes(e.target.value)}/></label></div><label><span>Excerpt</span><textarea value={blogExcerpt} onChange={(e)=>setBlogExcerpt(e.target.value)} placeholder="A short description shown on the Blog page…" rows="3"/></label><div className="article-asset-toolbar"><label className="file-picker-button"><FileText size={16}/> Add image / file<input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" onChange={e=>{const f=e.target.files?.[0]; if(f?.type?.startsWith("image/")) uploadArticleImage(f); else if(f) uploadArticleFile(f); e.target.value="";}}/></label><span>Images appear inline. Other files become clean view/download links.</span></div><label className="article-editor-label"><span>Article content <small>{uploadingArticleImage ? "Uploading asset…" : "Paste images directly, then click an image to resize it."}</small></span>{selectedArticleImage && <div className="article-image-toolbar" role="toolbar" aria-label="Resize selected image"><strong>Image size</strong><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(25)}>25%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(50)}>50%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(75)}>75%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(100)}>Full</button></div>}<div ref={blogContentRef} className="article-rich-editor" contentEditable suppressContentEditableWarning onInput={e=>setBlogContent(e.currentTarget.innerHTML)} onClick={handleArticleEditorClick} onPaste={handleArticlePaste} dangerouslySetInnerHTML={{__html:normalizeArticleHtml(blogContent)}} data-placeholder="Write your full journal entry here…" /></label><div className="admin-send-footer">{blogSent?<span className="success-note"><CheckCircle2 size={15}/> Article published.</span>:<span>Published articles appear on the public journal.</span>}<button className="primary-cta compact-cta" disabled={publishingBlog||!blogTitle.trim()||!blogExcerpt.trim()||!blogContent.trim()}>{publishingBlog?"Saving…":editingBlogId?"Save article":"Publish article"} <ArrowRight size={16}/></button></div></form><div className="blog-admin-history"><div className="blog-admin-history-head"><span className="card-kicker">PUBLISHED</span><strong>{blogPosts.length} article{blogPosts.length===1?"":"s"}</strong></div>{blogPosts.slice(0,20).map(post=><div className="blog-admin-row" key={post.id||post.slug}><span className="blog-admin-dot"></span><div className="blog-admin-row-copy"><strong>{post.title}</strong><small>{post.category||"Insights"} · {post.published_at?new Date(post.published_at).toLocaleDateString():"Local draft"}</small></div><div className="admin-row-actions"><button className="ghost-small" onClick={()=>startEditBlog(post)}><PenLine size={14}/> Edit</button><button className="danger-small" onClick={()=>deleteBlog(post.id)}><Trash2 size={14}/> Delete</button></div></div>)}</div>
+             <div className="panel-head"><div><span className="card-kicker">BLOG STUDIO</span><h2>{editingBlogId ? "Edit article" : "Write a new article"}</h2><p>Publish a blog article that appears on the public Blog page.</p></div><PenLine size={21}/></div>
+             <form className="blog-admin-form" onSubmit={publishBlog}><div className="blog-admin-grid"><label><span>Title</span><input value={blogTitle} onChange={(e)=>setBlogTitle(e.target.value)} placeholder="e.g. How to build a study routine that sticks"/></label><label><span>Slug</span><input value={blogSlug} onChange={(e)=>setBlogSlug(e.target.value)} placeholder="optional-url-slug"/></label><label><span>Category</span><select value={blogCategory} onChange={(e)=>setBlogCategory(e.target.value)}><option>Productivity</option><option>Study tips</option><option>Discipline</option><option>Mindset</option><option>Career</option><option>Product Updates</option></select></label><label><span>Read time</span><input type="number" min="1" max="30" value={blogReadMinutes} onChange={(e)=>setBlogReadMinutes(e.target.value)}/></label></div><label><span>Excerpt</span><textarea value={blogExcerpt} onChange={(e)=>setBlogExcerpt(e.target.value)} placeholder="A short description shown on the Blog page…" rows="3"/></label><div className="article-asset-toolbar"><label className="file-picker-button"><FileText size={16}/> Add image / file<input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" onChange={e=>{const f=e.target.files?.[0]; if(f?.type?.startsWith("image/")) uploadArticleImage(f); else if(f) uploadArticleFile(f); e.target.value="";}}/></label><span>Images appear inline. Other files become clean view/download links.</span></div><label className="article-editor-label"><span>Article content <small>{uploadingArticleImage ? "Uploading asset…" : "Paste images directly, then click an image to resize it."}</small></span>{selectedArticleImage && <div className="article-image-toolbar" role="toolbar" aria-label="Resize selected image"><strong>Image size</strong><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(25)}>25%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(50)}>50%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(75)}>75%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(100)}>Full</button></div>}<div ref={blogContentRef} className="article-rich-editor" contentEditable suppressContentEditableWarning onInput={e=>setBlogContent(e.currentTarget.innerHTML)} onClick={handleArticleEditorClick} onPaste={handleArticlePaste} dangerouslySetInnerHTML={{__html:normalizeArticleHtml(blogContent)}} data-placeholder="Write your full blog article here…" /></label><div className="admin-send-footer">{blogSent?<span className="success-note"><CheckCircle2 size={15}/> Article published.</span>:<span>Published articles appear on the public Blog.</span>}<button className="primary-cta compact-cta" disabled={publishingBlog||!blogTitle.trim()||!blogExcerpt.trim()||!blogContent.trim()}>{publishingBlog?"Saving…":editingBlogId?"Save article":"Publish article"} <ArrowRight size={16}/></button></div></form><div className="blog-admin-history"><div className="blog-admin-history-head"><span className="card-kicker">PUBLISHED</span><strong>{blogPosts.length} article{blogPosts.length===1?"":"s"}</strong></div>{blogPosts.slice(0,20).map(post=><div className="blog-admin-row" key={post.id||post.slug}><span className="blog-admin-dot"></span><div className="blog-admin-row-copy"><strong>{post.title}</strong><small>{post.category||"Insights"} · {post.published_at?new Date(post.published_at).toLocaleDateString():"Local draft"}</small></div><div className="admin-row-actions"><button className="ghost-small" onClick={()=>startEditBlog(post)}><PenLine size={14}/> Edit</button><button className="danger-small" onClick={()=>deleteBlog(post.id)}><Trash2 size={14}/> Delete</button></div></div>)}</div>
            </section>
 
           <section className="admin-panel admin-gallery-panel">
-            <div className="panel-head"><div><span className="card-kicker">JOURNAL GALLERY</span><h2>Build your visual journal.</h2><p>Add multiple images at once. Everything published here appears inside <strong>Gallery of TRACKEN</strong>.</p></div><ImagePlus size={21}/></div>
+            <div className="panel-head"><div><span className="card-kicker">BLOG GALLERY</span><h2>Build your visual blog.</h2><p>Add multiple images at once. Everything published here appears inside <strong>Gallery of TRACKEN</strong>.</p></div><ImagePlus size={21}/></div>
             <form className="admin-gallery-upload-premium" onSubmit={uploadGalleryImage}>
               <label className="admin-gallery-dropzone">
                 <div className="gallery-upload-icon"><UploadCloud size={28}/></div>

@@ -12097,3 +12097,204 @@ button { -webkit-tap-highlight-color: transparent; }
   .admin-user-detail > .panel-head h2 { font-size:25px; }
   .admin-detail-metrics { grid-template-columns:1fr 1fr; }
 }
+
+
+/* =========================================================
+   TRACKEN v1 — MOBILE-FIRST HOMEPAGE + SIDEBAR FIX
+   Requested: stack hero visual after copy, lighter centered type,
+   equal how-it-works cards, fluent mobile sidebar close behavior.
+   ========================================================= */
+@media (max-width: 1000px) {
+  .landing-v4 .home-hero-v4 {
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: min(100% - 32px, 760px) !important;
+    min-height: auto !important;
+    padding: 58px 0 64px !important;
+    gap: 34px !important;
+    text-align: center;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-copy {
+    width: 100%;
+    max-width: 700px !important;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .landing-v4 .home-hero-v4 .landing-eyebrow {
+    justify-content: center;
+    font-size: 9px;
+    letter-spacing: .15em;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-copy h1 {
+    max-width: 680px;
+    margin: 16px auto 18px !important;
+    font-family: "Manrope", sans-serif;
+    font-size: clamp(43px, 7.2vw, 62px) !important;
+    line-height: .98 !important;
+    letter-spacing: -.055em !important;
+    font-weight: 700 !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-copy > p {
+    max-width: 590px !important;
+    margin: 0 auto 21px !important;
+    font-size: 14px !important;
+    line-height: 1.65 !important;
+  }
+
+  .landing-v4 .home-hero-v4 .landing-hero-actions {
+    justify-content: center;
+    margin-top: 20px;
+  }
+
+  .landing-v4 .home-hero-v4 .home-trust-line {
+    justify-content: center;
+    margin-top: 17px;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-microcopy {
+    justify-content: center;
+  }
+
+  .landing-v4 .home-hero-stage-v4 {
+    width: 100% !important;
+    max-width: 680px;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 auto !important;
+    overflow: visible !important;
+  }
+
+  .landing-v4 .home-product-shell-v4 {
+    width: 100% !important;
+    max-width: 680px;
+    transform: none !important;
+  }
+
+  .landing-v4 .home-float-a { left: 0; }
+  .landing-v4 .home-float-b { right: 0; }
+}
+
+@media (max-width: 760px) {
+  .landing-v4 .home-hero-v4 {
+    width: min(100% - 28px, 680px) !important;
+    padding: 44px 0 52px !important;
+    gap: 27px !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-copy h1 {
+    font-size: clamp(40px, 11.5vw, 56px) !important;
+    line-height: 1 !important;
+    margin-top: 14px !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-copy > p {
+    font-size: 13.5px !important;
+    line-height: 1.62 !important;
+  }
+
+  .landing-v4 .home-hero-stage-v4 {
+    max-width: 620px;
+  }
+
+  .landing-v4 .home-product-shell-v4 {
+    max-width: 620px;
+  }
+
+  /* Three cards, one visual system: same height, typography and spacing. */
+  .landing-v4 .home-how-grid-v4 {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .landing-v4 .home-how-grid-v4 article {
+    min-height: 184px !important;
+    height: 184px !important;
+    box-sizing: border-box;
+    display: grid !important;
+    grid-template-columns: 48px minmax(0, 1fr) !important;
+    grid-template-rows: auto auto 1fr !important;
+    column-gap: 16px !important;
+    align-items: start;
+    padding: 19px 18px !important;
+    text-align: left;
+  }
+
+  .landing-v4 .home-how-grid-v4 article > span {
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+    margin: 0 !important;
+    font-size: 10px !important;
+    line-height: 1 !important;
+  }
+
+  .landing-v4 .home-how-grid-v4 article > div {
+    grid-column: 1 !important;
+    grid-row: 2 / 4 !important;
+    width: 46px !important;
+    height: 46px !important;
+    margin: 12px 0 0 !important;
+  }
+
+  .landing-v4 .home-how-grid-v4 article h3 {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    margin: 13px 0 4px !important;
+    font-size: 18px !important;
+    line-height: 1.1 !important;
+    font-weight: 750 !important;
+    letter-spacing: -.02em !important;
+  }
+
+  .landing-v4 .home-how-grid-v4 article p {
+    grid-column: 2 !important;
+    grid-row: 3 !important;
+    margin: 0 !important;
+    font-size: 12px !important;
+    line-height: 1.55 !important;
+    align-self: start;
+  }
+
+  .landing-v4 .home-how-grid-v4 article > b {
+    grid-column: 1 / -1 !important;
+    grid-row: 4 !important;
+    margin: 8px 0 0 !important;
+    font-size: 7px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .landing-v4 .home-hero-v4 {
+    padding-top: 38px !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-copy h1 {
+    font-size: clamp(38px, 11.5vw, 50px) !important;
+  }
+
+  .landing-v4 .home-hero-v4 .landing-eyebrow {
+    font-size: 8px;
+  }
+
+  .landing-v4 .home-how-grid-v4 article {
+    height: 180px !important;
+    min-height: 180px !important;
+    padding: 18px 16px !important;
+  }
+}
+
+/* On phones the sidebar is a drawer. The collapse/minimize control closes it;
+   it must never switch the drawer into the desktop collapsed-rail state. */
+@media (max-width: 650px) {
+  .tracken-command-center.sidebar-is-collapsed .tasken-sidebar {
+    width: min(86vw, 310px) !important;
+    transform: translate3d(-105%, 0, 0) !important;
+  }
+
+  .tracken-command-center.mobile-sidebar-is-open.sidebar-is-collapsed .tasken-sidebar {
+    transform: translate3d(0, 0, 0) !important;
+  }
+}
