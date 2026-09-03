@@ -12627,3 +12627,99 @@ button { -webkit-tap-highlight-color: transparent; }
     gap: 3px;
   }
 }
+
+/* =========================================================
+   TRACKEN v6 — MOBILE HERO / OVERVIEW SPACING + DARK DEPTH
+   Phones only: give the compact overview breathing room after
+   the hero copy and bring the following section closer. The
+   preview uses the same theme tokens in light mode and a richer
+   layered dark treatment in dark mode.
+   ========================================================= */
+@media (max-width: 760px) {
+  .landing-v4 .home-hero-v4 {
+    gap: 0 !important;
+    padding-bottom: 18px !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-stage-v4 {
+    margin: 30px auto 0 !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-mobile-overview-card {
+    border-color: color-mix(in srgb, var(--line) 92%, var(--home-purple) 8%);
+    box-shadow: 0 16px 38px rgba(35, 28, 85, .075), 0 4px 14px rgba(35, 28, 85, .035);
+  }
+
+  .landing-v4 .home-value {
+    padding-top: 40px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .landing-v4 .home-hero-v4 {
+    padding-bottom: 15px !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-stage-v4 {
+    margin-top: 26px !important;
+  }
+
+  .landing-v4 .home-value {
+    padding-top: 34px !important;
+  }
+}
+
+/* Richer mobile dark-mode product preview. */
+@media (max-width: 760px) {
+  [data-theme="dark"] .landing-v4 .home-mobile-overview-card {
+    position: relative !important;
+    background:
+      radial-gradient(circle at 88% 8%, rgba(124, 58, 237, .16), transparent 30%),
+      linear-gradient(145deg, #171a25 0%, #11131a 58%, #0e1016 100%) !important;
+    border-color: rgba(255,255,255,.12) !important;
+    box-shadow:
+      0 24px 60px rgba(0,0,0,.42),
+      0 8px 26px rgba(91,85,246,.10),
+      inset 0 1px 0 rgba(255,255,255,.045) !important;
+  }
+
+  [data-theme="dark"] .landing-v4 .home-mobile-overview-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(120deg, rgba(255,255,255,.035), transparent 38%, rgba(124,58,237,.045));
+  }
+
+  [data-theme="dark"] .landing-v4 .home-mobile-overview-card .home-mobile-overview-top,
+  [data-theme="dark"] .landing-v4 .home-mobile-overview-card .home-mobile-momentum {
+    border-color: rgba(255,255,255,.10) !important;
+  }
+
+  [data-theme="dark"] .landing-v4 .home-mobile-overview-card .home-mobile-metrics article {
+    background: linear-gradient(145deg, #1a1d27, #141720) !important;
+    border-color: rgba(255,255,255,.10) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+  }
+
+  [data-theme="dark"] .landing-v4 .home-mobile-overview-card .home-mobile-score {
+    background: #101219 !important;
+    border-color: #8a83ff !important;
+    box-shadow: 0 0 0 1px rgba(138,131,255,.16), 0 0 24px rgba(108,99,255,.15) !important;
+  }
+
+  [data-theme="dark"] .landing-v4 .home-mobile-overview-card .home-mobile-progress {
+    background: #292d3b !important;
+  }
+
+  [data-theme="dark"] .landing-v4 .home-mobile-overview-card .home-mobile-progress i {
+    background: linear-gradient(90deg, #6f67ff, #9b8cff) !important;
+    box-shadow: 0 0 12px rgba(124,58,237,.35);
+  }
+
+  [data-theme="dark"] .landing-v4 .home-mobile-overview-card .home-mobile-bars i {
+    background: linear-gradient(180deg, #9b8cff, #6559e8) !important;
+    box-shadow: 0 0 10px rgba(124,58,237,.16);
+  }
+}
