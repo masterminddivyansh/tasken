@@ -344,19 +344,8 @@ function App() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  useEffect(() => {
-    const gaId = "G-V0EP1JS8HP";
-    if (!gaId || window.__trackenAnalyticsLoaded) return;
-    window.__trackenAnalyticsLoaded = true;
-    const script = document.createElement("script");
-    script.async = true;
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(gaId)}`;
-    document.head.appendChild(script);
-    window.dataLayer = window.dataLayer || [];
-    window.gtag = function(){ window.dataLayer.push(arguments); };
-    window.gtag("js", new Date());
-    window.gtag("config", gaId, { anonymize_ip: true, send_page_view: false });
-  }, []);
+  // Google Analytics is loaded globally from index.html.
+  // Keep route tracking here for this React SPA so public-page navigation is measured.
 
   useEffect(() => {
     const publicPageMeta = {
@@ -405,9 +394,18 @@ function App() {
     setLinkTag("canonical", url);
   }, [publicPage, selectedBlogPost, session, authView, recoveryMode, theme]);
 
+  const analyticsInitialViewSkipped = useRef(false);
+
   useEffect(() => {
-    const gaId = "G-V0EP1JS8HP";
-    if (!gaId || typeof window.gtag !== "function" || session || authView || recoveryMode) return;
+    const gaId = "G-77XD0PBHJV";
+    if (!gaId || session || authView || recoveryMode) return;
+    // gtag.js sends the first page view automatically from index.html.
+    // Only send subsequent SPA route changes here to avoid duplicate initial views.
+    if (!analyticsInitialViewSkipped.current) {
+      analyticsInitialViewSkipped.current = true;
+      return;
+    }
+    if (typeof window.gtag !== "function") return;
     window.gtag("event", "page_view", {
       page_title: document.title,
       page_location: window.location.href,
