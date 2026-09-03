@@ -12298,3 +12298,67 @@ button { -webkit-tap-highlight-color: transparent; }
     transform: translate3d(0, 0, 0) !important;
   }
 }
+
+/* =========================================================
+   TRACKEN v2 — MOBILE HERO VISUAL REFINEMENT
+   On phones the hero copy is the primary conversion moment.
+   The oversized dashboard mockup is hidden to avoid clipping,
+   excessive page height and a cramped miniature UI.
+   ========================================================= */
+@media (max-width: 760px) {
+  .landing-v4 .home-hero-v4 {
+    gap: 0 !important;
+    padding-bottom: 34px !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-copy {
+    max-width: 560px !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-copy h1 {
+    max-width: 520px !important;
+    font-size: clamp(39px, 10.8vw, 52px) !important;
+    line-height: 1.01 !important;
+    letter-spacing: -.052em !important;
+    margin: 14px auto 16px !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-copy > p {
+    max-width: 520px !important;
+    margin-bottom: 18px !important;
+  }
+
+  .landing-v4 .home-hero-v4 .landing-hero-actions {
+    margin-top: 18px !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-trust-line {
+    margin-top: 15px !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-microcopy {
+    margin-top: 14px !important;
+  }
+
+  /* The desktop product mockup is intentionally not rendered on phones.
+     The hero remains clean, fast and conversion-focused instead of showing
+     a tiny dashboard that cannot be read comfortably at phone width. */
+  .landing-v4 .home-hero-v4 .home-hero-stage-v4 {
+    display: none !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .landing-v4 .home-hero-v4 {
+    padding-top: 34px !important;
+    padding-bottom: 30px !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-copy h1 {
+    font-size: clamp(37px, 10.9vw, 48px) !important;
+  }
+
+  .landing-v4 .home-hero-v4 .home-hero-copy > p {
+    font-size: 13px !important;
+  }
+}
