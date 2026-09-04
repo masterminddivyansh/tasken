@@ -1,3 +1,6 @@
 # Keep the provider pages.dev hostname out of search results after the custom .in domain is connected.
 https://project.pages.dev/*
   X-Robots-Tag: noindex
+
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6766794805956148"
+     crossorigin="anonymous"></script>
