@@ -128,6 +128,21 @@ function normalizePublicPath(pathname) {
   return pathname.replace(/\/+$/, "");
 }
 
+function slugifyBlogSlug(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 120);
+}
+
+function getBlogSlugFromPath(pathname = window.location.pathname) {
+  const normalized = normalizePublicPath(pathname);
+  const match = normalized.match(/^\/blog\/([^/]+)$/i);
+  return match ? slugifyBlogSlug(decodeURIComponent(match[1])) : "";
+}
+
 function getInitialPublicPage() {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -135,17 +150,17 @@ function getInitialPublicPage() {
     if (redirected) {
       const clean = normalizePublicPath(redirected);
       window.history.replaceState({}, "", clean === "/" ? "/" : `${clean}/`);
-      return PATH_TO_PAGE[clean] || "not-found";
+      return getBlogSlugFromPath(clean) ? "blog-post" : (PATH_TO_PAGE[clean] || "not-found");
     }
     const path = normalizePublicPath(window.location.pathname);
-    return PATH_TO_PAGE[path] || "not-found";
+    return getBlogSlugFromPath(path) ? "blog-post" : (PATH_TO_PAGE[path] || "not-found");
   } catch {
     return "home";
   }
 }
 
-function pageUrl(page) {
-  const path = PUBLIC_PATHS[page] || "/";
+function pageUrl(page, postSlug = "") {
+  const path = page === "blog-post" && postSlug ? `/blog/${slugifyBlogSlug(postSlug)}/` : (PUBLIC_PATHS[page] || "/");
   return new URL(path, "https://tracken.in").toString();
 }
 
@@ -259,15 +274,43 @@ function normalizeArticleHtml(html) {
   if (typeof window === "undefined") return source;
   const doc = new DOMParser().parseFromString(source, "text/html");
   doc.querySelectorAll("script,style,iframe,object,embed,form").forEach(el => el.remove());
+  doc.querySelectorAll("font").forEach(font => {
+    const sizeMap = {"1":"11px","2":"13px","3":"16px","4":"19px","5":"24px","6":"30px","7":"38px"};
+    const size = sizeMap[font.getAttribute("size") || ""];
+    const color = font.getAttribute("color");
+    if (!size && !color) return;
+    const span = doc.createElement("span");
+    span.innerHTML = font.innerHTML;
+    const styles = [];
+    if (size) styles.push(`font-size:${size}`);
+    if (color && /^[#a-z0-9(),.%\s-]+$/i.test(color)) styles.push(`color:${color}`);
+    if (styles.length) span.setAttribute("style", styles.join(";"));
+    font.replaceWith(span);
+  });
   doc.querySelectorAll("*").forEach(el => {
     [...el.attributes].forEach(attr => {
       if (["src", "href", "alt", "title", "target", "rel", "width", "download"].includes(attr.name)) return;
-      if (attr.name === "style" && el.tagName === "IMG") {
-        const match = String(attr.value || "").match(/(?:^|;)\s*width\s*:\s*(\d{1,3})%/i);
-        if (match) el.setAttribute("style", `width:${Math.min(100, Math.max(10, Number(match[1])))}%;height:auto;`);
-        else el.removeAttribute("style");
+      if (attr.name === "style") {
+        if (el.tagName === "IMG") {
+          const match = String(attr.value || "").match(/(?:^|;)\s*width\s*:\s*(\d{1,3})%/i);
+          if (match) el.setAttribute("style", `width:${Math.min(100, Math.max(10, Number(match[1])))}%;height:auto;`);
+          else el.removeAttribute("style");
+        } else {
+          const safe = [];
+          const raw = String(attr.value || "");
+          raw.split(";").forEach(part => {
+            const [property, ...rest] = part.split(":");
+            const prop = String(property || "").trim().toLowerCase();
+            const value = rest.join(":").trim();
+            if (!value) return;
+            if (["color","font-size","font-weight","font-style","text-decoration","text-align","background-color"].includes(prop) && !/[<>]/.test(value)) safe.push(`${prop}:${value}`);
+          });
+          if (safe.length) el.setAttribute("style", safe.join(";"));
+          else el.removeAttribute("style");
+        }
         return;
       }
+      if (attr.name === "size" && el.tagName === "FONT") return;
       el.removeAttribute(attr.name);
     });
     if (el.tagName === "A") {
@@ -316,6 +359,7 @@ function App() {
   const [authView, setAuthView] = useState(null);
   const [publicPage, setPublicPage] = useState(getInitialPublicPage);
   const [selectedBlogPost, setSelectedBlogPost] = useState(null);
+  const [blogPostLoading, setBlogPostLoading] = useState(() => getInitialPublicPage() === "blog-post");
   const [loadingSession, setLoadingSession] = useState(true);
   const [recoveryMode, setRecoveryMode] = useState(false);
 
@@ -326,6 +370,7 @@ function App() {
 
   const navigatePublicPage = (page) => {
     setSelectedBlogPost(null);
+    setBlogPostLoading(false);
     setPublicPage(page);
     if (page !== "blog-post" && PUBLIC_PATHS[page]) {
       const nextPath = PUBLIC_PATHS[page];
@@ -334,11 +379,45 @@ function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const navigateToBlogPost = (post) => {
+    const slug = slugifyBlogSlug(post?.slug || post?.title);
+    if (!slug) return;
+    const nextPath = `/blog/${slug}/`;
+    setSelectedBlogPost({ ...post, slug });
+    setBlogPostLoading(false);
+    setPublicPage("blog-post");
+    if (window.location.pathname !== nextPath) window.history.pushState({}, "", nextPath);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const slug = getBlogSlugFromPath();
+    if (publicPage !== "blog-post" || !slug) return undefined;
+    if (selectedBlogPost?.slug === slug) return undefined;
+    setBlogPostLoading(true);
+    (async () => {
+      const { data, error } = await supabase.from("blog_posts").select("*").eq("published", true).eq("slug", slug).maybeSingle();
+      if (cancelled) return;
+      if (!error && data) {
+        setSelectedBlogPost(data);
+        setBlogPostLoading(false);
+      } else {
+        setSelectedBlogPost(null);
+        setBlogPostLoading(false);
+        setPublicPage("not-found");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [publicPage, selectedBlogPost?.slug]);
+
   useEffect(() => {
     const onPopState = () => {
       const path = normalizePublicPath(window.location.pathname);
+      const slug = getBlogSlugFromPath(path);
       setSelectedBlogPost(null);
-      setPublicPage(PATH_TO_PAGE[path] || "not-found");
+      setBlogPostLoading(Boolean(slug));
+      setPublicPage(slug ? "blog-post" : (PATH_TO_PAGE[path] || "not-found"));
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -378,7 +457,7 @@ function App() {
       description: selectedBlogPost.excerpt || "Practical ideas about study tracking, productivity, habits, personal progress and finance tracking from TRACKEN."
     } : null;
     const meta = blogPostMeta || publicPageMeta[publicPage] || publicPageMeta.home;
-    const url = pageUrl(publicPage === "blog-post" ? "blog" : publicPage);
+    const url = pageUrl(publicPage, selectedBlogPost?.slug || "");
     document.title = meta.title;
     setMetaTag("description", meta.description);
     setMetaTag("robots", "index, follow");
@@ -386,7 +465,7 @@ function App() {
     setMetaTag("og:description", meta.description, "property");
     setMetaTag("og:type", publicPage === "blog" ? "website" : "website", "property");
     setMetaTag("og:url", url, "property");
-    setMetaTag("og:site_name", "TRACKEN", "property");
+    setMetaTag("og:site_name", "TRACKEN WORKSPACE", "property");
     setMetaTag("twitter:card", "summary_large_image");
     setMetaTag("twitter:title", meta.title);
     setMetaTag("twitter:description", meta.description);
@@ -479,12 +558,15 @@ function App() {
     return <TaskenErrorBoundary><NotFoundPage theme={theme} toggleTheme={toggleTheme} onNavigate={navigatePublicPage} /></TaskenErrorBoundary>;
   }
 
-  if (publicPage === "blog-post" && selectedBlogPost) {
-    return <TaskenErrorBoundary><BlogPostPage post={selectedBlogPost} theme={theme} toggleTheme={toggleTheme} onBack={() => { setSelectedBlogPost(null); setPublicPage("blog"); }} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => navigatePublicPage("contact")} onNavigate={navigatePublicPage} /></TaskenErrorBoundary>;
+  if (publicPage === "blog-post") {
+    if (blogPostLoading || !selectedBlogPost) {
+      return <TaskenErrorBoundary><div className="loading-screen"><div className="loading-logo">TRACKEN<span>.</span></div></div></TaskenErrorBoundary>;
+    }
+    return <TaskenErrorBoundary><BlogPostPage post={selectedBlogPost} theme={theme} toggleTheme={toggleTheme} onBack={() => navigatePublicPage("blog")} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => navigatePublicPage("contact")} onNavigate={navigatePublicPage} /></TaskenErrorBoundary>;
   }
 
   if (publicPage === "blog") {
-    return <TaskenErrorBoundary><BlogPage theme={theme} toggleTheme={toggleTheme} onBack={() => navigatePublicPage("home")} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => navigatePublicPage("contact")} onNavigate={navigatePublicPage} onOpenPost={(post) => { setSelectedBlogPost(post); setPublicPage("blog-post"); }} /></TaskenErrorBoundary>;
+    return <TaskenErrorBoundary><BlogPage theme={theme} toggleTheme={toggleTheme} onBack={() => navigatePublicPage("home")} onLogin={() => setAuthView("login")} onRegister={() => setAuthView("register")} onContact={() => navigatePublicPage("contact")} onNavigate={navigatePublicPage} onOpenPost={navigateToBlogPost} /></TaskenErrorBoundary>;
   }
 
   if (["about", "privacy", "terms", "cookies", "disclaimer", "advertising"].includes(publicPage)) {
@@ -1104,7 +1186,7 @@ function BlogPage({theme,toggleTheme,onBack,onLogin,onRegister,onContact,onNavig
                 <div className="journal-meta"><span>{post.category||"Blog"}</span><time>{post.published_at?new Date(post.published_at).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):"Published"}</time></div>
                 <h2>{post.title}</h2>
                 <p>{post.excerpt}</p>
-                <div className="journal-card-footer"><span>{post.read_minutes||5} min read</span><ArrowRight size={16}/></div>
+                <a className="journal-card-footer" href={`/blog/${slugifyBlogSlug(post.slug || post.title)}/`} onClick={e=>{e.preventDefault();onOpenPost(post);}}><span>{post.read_minutes||5} min read</span><ArrowRight size={16}/></a>
               </div>
             </article>)}
           </section>
@@ -1174,7 +1256,6 @@ function AuthPage({ mode, setMode, theme, toggleTheme, onBack }) {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [broadcastEditorRef, setBroadcastEditorRef] = useState(null);
   const [broadcastFile, setBroadcastFile] = useState(null);
   const [broadcastHtml, setBroadcastHtml] = useState("");
   const [uploadingBroadcastFile, setUploadingBroadcastFile] = useState(false);
@@ -2939,7 +3020,56 @@ function UpdatesPage({ session, theme, toggleTheme, onBack, onUnreadChange = () 
 }
 
 
+function RichTextToolbar({ editorRef, compact = false }) {
+  const savedRangeRef = useRef(null);
+  useEffect(() => {
+    const rememberSelection = () => {
+      const editor = editorRef?.current;
+      const selection = window.getSelection();
+      if (!editor || !selection?.rangeCount) return;
+      const range = selection.getRangeAt(0);
+      if (editor.contains(range.commonAncestorContainer)) savedRangeRef.current = range.cloneRange();
+    };
+    document.addEventListener("selectionchange", rememberSelection);
+    return () => document.removeEventListener("selectionchange", rememberSelection);
+  }, [editorRef]);
+
+  const run = (command, value = null) => {
+    const editor = editorRef?.current;
+    if (!editor) return;
+    editor.focus();
+    if (savedRangeRef.current && editor.contains(savedRangeRef.current.commonAncestorContainer)) {
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(savedRangeRef.current);
+    }
+    try { document.execCommand(command, false, value); } catch {}
+    editor.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const formatBlock = (tag) => run("formatBlock", tag);
+  const stopToolbarBlur = (e) => e.preventDefault();
+  return (
+    <div className={`rich-text-toolbar ${compact ? "compact" : ""}`} role="toolbar" aria-label="Text formatting">
+      <button type="button" onMouseDown={stopToolbarBlur} onClick={() => run("bold")} aria-label="Bold"><strong>B</strong></button>
+      <button type="button" onMouseDown={stopToolbarBlur} onClick={() => run("italic")} aria-label="Italic"><em>I</em></button>
+      <button type="button" onMouseDown={stopToolbarBlur} onClick={() => run("underline")} aria-label="Underline"><u>U</u></button>
+      <span className="rich-toolbar-divider" />
+      <select defaultValue="P" onChange={e => { formatBlock(e.target.value); e.target.value="P"; }} aria-label="Text size / heading">
+        <option value="P">Normal</option><option value="H1">H1</option><option value="H2">H2</option><option value="H3">H3</option><option value="H4">H4</option><option value="H5">H5</option><option value="H6">H6</option>
+      </select>
+      <button type="button" onMouseDown={stopToolbarBlur} onClick={() => run("increaseFontSize")} aria-label="Increase text size">A+</button>
+      <button type="button" onMouseDown={stopToolbarBlur} onClick={() => run("decreaseFontSize")} aria-label="Decrease text size">A−</button>
+      <label className="rich-color-control" title="Text color">
+        <span>A</span><input type="color" defaultValue="#5b55f6" onChange={e => run("foreColor", e.target.value)} aria-label="Text color" />
+      </label>
+      <button type="button" onMouseDown={stopToolbarBlur} onClick={() => run("removeFormat")} aria-label="Clear formatting">Tx</button>
+    </div>
+  );
+}
+
 function AdminPage({ session, theme, toggleTheme, onBack }) {
+  const broadcastEditorRef = useRef(null);
+  const updateEditorRef = useRef(null);
   const [users, setUsers] = useState([]);
   const [records, setRecords] = useState([]);
   const [tasks, setTasks] = useState([]);
@@ -2954,7 +3084,6 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
   const [type, setType] = useState("Notice");
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
-  const [broadcastEditorRef, setBroadcastEditorRef] = useState(null);
   const [broadcastFile, setBroadcastFile] = useState(null);
   const [broadcastHtml, setBroadcastHtml] = useState("");
   const [uploadingBroadcastFile, setUploadingBroadcastFile] = useState(false);
@@ -3076,13 +3205,13 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
     let attachment=null;
     try {
       if(broadcastFile) attachment=await uploadAdminFile(broadcastFile,"broadcast");
-      const editorHtml=broadcastEditorRef ? normalizeArticleHtml(broadcastEditorRef.innerHTML) : normalizeArticleHtml(message.trim());
+      const editorHtml=broadcastEditorRef.current ? normalizeArticleHtml(broadcastEditorRef.current.innerHTML) : normalizeArticleHtml(message.trim());
       if(!editorHtml.replace(/<[^>]*>/g,"").trim() && !attachment) throw new Error("Add a message or attach a file.");
       const stored=JSON.stringify({__trackenUpdate:1,html:editorHtml,attachment});
       const { data, error: sendError } = await supabase.from("updates").insert({ title: title.trim(), message: stored, type, recipient_user_id: target === "all" ? null : target, created_by: session.user.id }).select().single();
       if (sendError) throw sendError;
       setSentHistory((current) => [{...(data||{}),id:data?.id||`local-${Date.now()}`,title:title.trim(),message:stored,type,recipient_user_id:target === "all" ? null : target,created_by:session.user.id,created_at:new Date().toISOString()}, ...current]);
-      setTitle(""); setMessage(""); setBroadcastFile(null); setBroadcastHtml(""); if(broadcastEditorRef) broadcastEditorRef.innerHTML=""; setSent(true);
+      setTitle(""); setMessage(""); setBroadcastFile(null); setBroadcastHtml(""); if(broadcastEditorRef.current) broadcastEditorRef.current.innerHTML=""; setSent(true);
       setTimeout(() => setSent(false), 3500);
     } catch(err){
       if(attachment?.bucket && attachment?.storage_path) await supabase.storage.from(attachment.bucket).remove([attachment.storage_path]).catch(()=>{});
@@ -3091,7 +3220,10 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
   };
 
   const startEditUpdate = (item) => { const payload=parseUpdatePayload(item.message); setEditingUpdateId(item.id); setUpdateEdit({title:item.title||"", message:payload.html||"", type:item.type||"Notice"}); };
-  const cancelEditUpdate = () => { setEditingUpdateId(null); setUpdateEdit({title:"", message:"", type:"Notice"}); };
+  useEffect(() => {
+    if (editingUpdateId && updateEditorRef.current) updateEditorRef.current.innerHTML = normalizeArticleHtml(updateEdit.message || "");
+  }, [editingUpdateId]);
+  const cancelEditUpdate = () => { setEditingUpdateId(null); setUpdateEdit({title:"", message:"", type:"Notice"}); if(updateEditorRef.current) updateEditorRef.current.innerHTML=""; };
   const saveUpdateEdit = async () => {
     if(!editingUpdateId || !updateEdit.title.trim()) return;
     const currentItem=sentHistory.find(x=>x.id===editingUpdateId); const currentPayload=parseUpdatePayload(currentItem?.message||""); const nextMessage=JSON.stringify({__trackenUpdate:1,html:normalizeArticleHtml(updateEdit.message.trim()),attachment:currentPayload.attachment||null}); const {data,error:editError}=await supabase.from("updates").update({title:updateEdit.title.trim(),message:nextMessage,type:updateEdit.type}).eq("id",editingUpdateId).select().single();
@@ -3260,7 +3392,8 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
     e.preventDefault();
     if (!blogTitle.trim() || !blogExcerpt.trim() || !blogContent.trim() || publishingBlog) return;
     setPublishingBlog(true); setError(""); setBlogSent(false);
-    const slug = blogSlug.trim() || blogTitle.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");
+    const slug = slugifyBlogSlug(blogSlug || blogTitle);
+    if (!slug) { setError("Please enter a valid article slug or title."); setPublishingBlog(false); return; }
     const payload = { title: blogTitle.trim(), slug, category: blogCategory, excerpt: blogExcerpt.trim(), content: blogContent.trim(), read_minutes: Number(blogReadMinutes)||5, published: true, published_at: new Date().toISOString(), created_by: session.user.id };
     if(editingBlogId){
       if(String(editingBlogId).startsWith("local-")){ const next=blogPosts.map(post=>post.id===editingBlogId?{...post,...payload}:post); setBlogPosts(next); localStorage.setItem("tasken-blog-posts",JSON.stringify(next)); }
@@ -3374,7 +3507,8 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
           <section className="admin-stat-grid"><AdminStat icon={Users} label="Registered accounts" value={users.length} meta={`${activeToday} active today`} /><AdminStat icon={Clock3} label="Total study time" value={`${Math.floor(totalStudyMinutes / 60)}h`} meta={`${totalStudyMinutes % 60}m extra`} /><AdminStat icon={BookOpen} label="Questions solved" value={totalQuestions.toLocaleString()} meta="Across saved records" /><AdminStat icon={Target} label="Active goals" value={activeGoals} meta="Currently in progress" /></section>
           <section className="admin-panel admin-broadcast-panel">
             <div className="panel-head"><div><span className="card-kicker">BROADCAST</span><h2>Publish an update</h2><p>Send rich content, tables, images or downloadable files to everyone or one account.</p></div><Send size={21}/></div>
-            <form className="admin-send-form" onSubmit={sendUpdate}><label><span>Audience</span><select value={target} onChange={e=>setTarget(e.target.value)}><option value="all">Everyone — all registered accounts</option>{users.map(user=><option key={user.id} value={user.id}>{user.username||user.full_name||"Unnamed user"} · {user.email||user.id.slice(0,8)}</option>)}</select></label><label><span>Message type</span><select value={type} onChange={e=>setType(e.target.value)}>{UPDATE_TYPES.map(item=><option key={item}>{item}</option>)}</select></label><label><span>Title</span><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. TRACKEN 4.2.0 is live"/></label><label><span>Update</span><div ref={el=>setBroadcastEditorRef(el)} className="admin-rich-editor" contentEditable suppressContentEditableWarning data-placeholder="Write an update, paste formatted text or tables, and include images…" onInput={e=>{setBroadcastHtml(e.currentTarget.innerHTML);setMessage(e.currentTarget.innerHTML)}} onPaste={e=>{const items=Array.from(e.clipboardData?.items||[]);const img=items.find(i=>i.type.startsWith("image/"));if(img){e.preventDefault();uploadAdminFile(img.getAsFile(),"broadcast").then(file=>{if(!file)return;document.execCommand("insertHTML",false,`<p><img src="${file.url}" alt="${file.name}" style="max-width:100%;height:auto"/></p>`);setBroadcastHtml(e.currentTarget.innerHTML);setMessage(e.currentTarget.innerHTML)}).catch(err=>setError(err.message));}}}/></label><div className="admin-file-picker"><label className="file-picker-button"><UploadCloud size={16}/> {broadcastFile?"Replace file":"Attach file"}<input type="file" onChange={e=>setBroadcastFile(e.target.files?.[0]||null)}/></label>{broadcastFile&&<span><FileText size={15}/>{broadcastFile.name} · {formatFileSize(broadcastFile.size)} <button type="button" onClick={()=>setBroadcastFile(null)}>Remove</button></span>}</div><div className="admin-send-footer">{sent?<span className="success-note"><CheckCircle2 size={15}/> Update sent successfully.</span>:<span>Supports rich text, pasted tables/images and files up to 25 MB.</span>}<button className="primary-cta compact-cta" disabled={sending||uploadingBroadcastFile||!title.trim()}>{sending||uploadingBroadcastFile?"Publishing…":"Send update"} <ArrowRight size={16}/></button></div></form>
+            <form className="admin-send-form" onSubmit={sendUpdate}><label><span>Audience</span><select value={target} onChange={e=>setTarget(e.target.value)}><option value="all">Everyone — all registered accounts</option>{users.map(user=><option key={user.id} value={user.id}>{user.username||user.full_name||"Unnamed user"} · {user.email||user.id.slice(0,8)}</option>)}</select></label><label><span>Message type</span><select value={type} onChange={e=>setType(e.target.value)}>{UPDATE_TYPES.map(item=><option key={item}>{item}</option>)}</select></label><label><span>Title</span><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. TRACKEN 4.2.0 is live"/></label><div className="admin-editor-field"><span>Update</span><RichTextToolbar editorRef={broadcastEditorRef} compact />
+             <div ref={broadcastEditorRef} className="admin-rich-editor" contentEditable suppressContentEditableWarning data-placeholder="Write an update, paste formatted text or tables, and include images…" onInput={e=>{setBroadcastHtml(e.currentTarget.innerHTML);setMessage(e.currentTarget.innerHTML)}} onPaste={e=>{const items=Array.from(e.clipboardData?.items||[]);const img=items.find(i=>i.type.startsWith("image/"));if(img){e.preventDefault();uploadAdminFile(img.getAsFile(),"broadcast").then(file=>{if(!file)return;document.execCommand("insertHTML",false,`<p><img src="${file.url}" alt="${file.name}" style="max-width:100%;height:auto"/></p>`);setBroadcastHtml(e.currentTarget.innerHTML);setMessage(e.currentTarget.innerHTML)}).catch(err=>setError(err.message));}}}/></div><div className="admin-file-picker"><label className="file-picker-button"><UploadCloud size={16}/> {broadcastFile?"Replace file":"Attach file"}<input type="file" onChange={e=>setBroadcastFile(e.target.files?.[0]||null)}/></label>{broadcastFile&&<span><FileText size={15}/>{broadcastFile.name} · {formatFileSize(broadcastFile.size)} <button type="button" onClick={()=>setBroadcastFile(null)}>Remove</button></span>}</div><div className="admin-send-footer">{sent?<span className="success-note"><CheckCircle2 size={15}/> Update sent successfully.</span>:<span>Supports rich text, pasted tables/images and files up to 25 MB.</span>}<button className="primary-cta compact-cta" disabled={sending||uploadingBroadcastFile||!title.trim()}>{sending||uploadingBroadcastFile?"Publishing…":"Send update"} <ArrowRight size={16}/></button></div></form>
           </section>
 
           <section className="admin-panel users-panel admin-candidates-panel"><div className="panel-head"><div><span className="card-kicker">CANDIDATES</span><h2>Registered users</h2><p>Review activity, streaks and the work each account has recorded.</p></div><Users size={21}/></div><div className="admin-search"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search name or email…"/></div>{loading?<div className="admin-empty">Loading accounts…</div>:<div className="admin-user-list">{filteredUsers.map(user=>{const summary=userSummary(user.id);return <div className="admin-user-row admin-user-row-expanded" key={user.id}><div className="admin-user-avatar">{(user.username||user.full_name||user.email||"U").charAt(0).toUpperCase()}</div><div className="admin-user-main"><strong>{user.username||user.full_name||"Unnamed user"}</strong><small>{user.email||user.id}</small></div><div className="admin-user-stats"><span><b>{summary.streak}</b> streak</span><span><b>{summary.totalTasks}</b> tasks</span><span><b>{summary.completed}</b> done</span><span><b>{summary.hours}</b> study</span><span><b>{summary.goals}</b> goals</span></div><button className="primary-small admin-view-user" onClick={()=>openUserDetail(user)}>View <ChevronRight size={14}/></button></div>})}{!filteredUsers.length&&<div className="admin-empty">No accounts match your search.</div>}</div>}</section>
@@ -3398,7 +3532,7 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
                   <article className="admin-history-row admin-edit-row" key={item.id}>
                     <div className="admin-history-icon"><PenLine size={17} /></div>
                     <div className="admin-history-main">
-                      <div className="admin-inline-form"><select value={updateEdit.type} onChange={e=>setUpdateEdit({...updateEdit,type:e.target.value})}>{UPDATE_TYPES.map(x=><option key={x}>{x}</option>)}</select><input value={updateEdit.title} onChange={e=>setUpdateEdit({...updateEdit,title:e.target.value})}/><textarea value={updateEdit.message} onChange={e=>setUpdateEdit({...updateEdit,message:e.target.value})}/><div className="admin-inline-actions"><button className="primary-small" onClick={saveUpdateEdit}>Save changes</button><button className="ghost-small" onClick={cancelEditUpdate}>Cancel</button></div></div>
+                      <div className="admin-inline-form"><select value={updateEdit.type} onChange={e=>setUpdateEdit({...updateEdit,type:e.target.value})}>{UPDATE_TYPES.map(x=><option key={x}>{x}</option>)}</select><input value={updateEdit.title} onChange={e=>setUpdateEdit({...updateEdit,title:e.target.value})}/><RichTextToolbar editorRef={updateEditorRef} compact /><div ref={updateEditorRef} className="admin-rich-editor admin-inline-rich-editor" contentEditable suppressContentEditableWarning data-placeholder="Edit your update…" onInput={e=>setUpdateEdit({...updateEdit,message:e.currentTarget.innerHTML})} /><div className="admin-inline-actions"><button className="primary-small" onClick={saveUpdateEdit}>Save changes</button><button className="ghost-small" onClick={cancelEditUpdate}>Cancel</button></div></div>
                     </div>
                   </article>
                 ) : (
@@ -3422,7 +3556,7 @@ function AdminPage({ session, theme, toggleTheme, onBack }) {
           </section>
           <section className="admin-panel blog-admin-panel">
              <div className="panel-head"><div><span className="card-kicker">BLOG STUDIO</span><h2>{editingBlogId ? "Edit article" : "Write a new article"}</h2><p>Publish a blog article that appears on the public Blog page.</p></div><PenLine size={21}/></div>
-             <form className="blog-admin-form" onSubmit={publishBlog}><div className="blog-admin-grid"><label><span>Title</span><input value={blogTitle} onChange={(e)=>setBlogTitle(e.target.value)} placeholder="e.g. How to build a study routine that sticks"/></label><label><span>Slug</span><input value={blogSlug} onChange={(e)=>setBlogSlug(e.target.value)} placeholder="optional-url-slug"/></label><label><span>Category</span><select value={blogCategory} onChange={(e)=>setBlogCategory(e.target.value)}><option>Productivity</option><option>Study tips</option><option>Discipline</option><option>Mindset</option><option>Career</option><option>Product Updates</option></select></label><label><span>Read time</span><input type="number" min="1" max="30" value={blogReadMinutes} onChange={(e)=>setBlogReadMinutes(e.target.value)}/></label></div><label><span>Excerpt</span><textarea value={blogExcerpt} onChange={(e)=>setBlogExcerpt(e.target.value)} placeholder="A short description shown on the Blog page…" rows="3"/></label><div className="article-asset-toolbar"><label className="file-picker-button"><FileText size={16}/> Add image / file<input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" onChange={e=>{const f=e.target.files?.[0]; if(f?.type?.startsWith("image/")) uploadArticleImage(f); else if(f) uploadArticleFile(f); e.target.value="";}}/></label><span>Images appear inline. Other files become clean view/download links.</span></div><label className="article-editor-label"><span>Article content <small>{uploadingArticleImage ? "Uploading asset…" : "Paste images directly, then click an image to resize it."}</small></span>{selectedArticleImage && <div className="article-image-toolbar" role="toolbar" aria-label="Resize selected image"><strong>Image size</strong><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(25)}>25%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(50)}>50%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(75)}>75%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(100)}>Full</button></div>}<div ref={blogContentRef} className="article-rich-editor" contentEditable suppressContentEditableWarning onInput={e=>setBlogContent(e.currentTarget.innerHTML)} onClick={handleArticleEditorClick} onPaste={handleArticlePaste} dangerouslySetInnerHTML={{__html:normalizeArticleHtml(blogContent)}} data-placeholder="Write your full blog article here…" /></label><div className="admin-send-footer">{blogSent?<span className="success-note"><CheckCircle2 size={15}/> Article published.</span>:<span>Published articles appear on the public Blog.</span>}<button className="primary-cta compact-cta" disabled={publishingBlog||!blogTitle.trim()||!blogExcerpt.trim()||!blogContent.trim()}>{publishingBlog?"Saving…":editingBlogId?"Save article":"Publish article"} <ArrowRight size={16}/></button></div></form><div className="blog-admin-history"><div className="blog-admin-history-head"><span className="card-kicker">PUBLISHED</span><strong>{blogPosts.length} article{blogPosts.length===1?"":"s"}</strong></div>{blogPosts.slice(0,20).map(post=><div className="blog-admin-row" key={post.id||post.slug}><span className="blog-admin-dot"></span><div className="blog-admin-row-copy"><strong>{post.title}</strong><small>{post.category||"Insights"} · {post.published_at?new Date(post.published_at).toLocaleDateString():"Local draft"}</small></div><div className="admin-row-actions"><button className="ghost-small" onClick={()=>startEditBlog(post)}><PenLine size={14}/> Edit</button><button className="danger-small" onClick={()=>deleteBlog(post.id)}><Trash2 size={14}/> Delete</button></div></div>)}</div>
+             <form className="blog-admin-form" onSubmit={publishBlog}><div className="blog-admin-grid"><label><span>Title</span><input value={blogTitle} onChange={(e)=>setBlogTitle(e.target.value)} placeholder="e.g. How to build a study routine that sticks"/></label><label><span>Slug</span><input value={blogSlug} onChange={(e)=>setBlogSlug(e.target.value)} placeholder="optional-url-slug"/></label><label><span>Category</span><select value={blogCategory} onChange={(e)=>setBlogCategory(e.target.value)}><option>Productivity</option><option>Study tips</option><option>Discipline</option><option>Mindset</option><option>Career</option><option>Product Updates</option></select></label><label><span>Read time</span><input type="number" min="1" max="30" value={blogReadMinutes} onChange={(e)=>setBlogReadMinutes(e.target.value)}/></label></div><label><span>Excerpt</span><textarea value={blogExcerpt} onChange={(e)=>setBlogExcerpt(e.target.value)} placeholder="A short description shown on the Blog page…" rows="3"/></label><div className="article-asset-toolbar"><label className="file-picker-button"><FileText size={16}/> Add image / file<input type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" onChange={e=>{const f=e.target.files?.[0]; if(f?.type?.startsWith("image/")) uploadArticleImage(f); else if(f) uploadArticleFile(f); e.target.value="";}}/></label><span>Images appear inline. Other files become clean view/download links.</span></div><div className="article-editor-label"><span>Article content <small>{uploadingArticleImage ? "Uploading asset…" : "Format text, add headings and paste images directly."}</small></span><RichTextToolbar editorRef={blogContentRef} />{selectedArticleImage && <div className="article-image-toolbar" role="toolbar" aria-label="Resize selected image"><strong>Image size</strong><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(25)}>25%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(50)}>50%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(75)}>75%</button><button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>resizeSelectedArticleImage(100)}>Full</button></div>}<div ref={blogContentRef} className="article-rich-editor" contentEditable suppressContentEditableWarning onInput={e=>setBlogContent(e.currentTarget.innerHTML)} onClick={handleArticleEditorClick} onPaste={handleArticlePaste} data-placeholder="Write your full blog article here…" /></div><div className="admin-send-footer">{blogSent?<span className="success-note"><CheckCircle2 size={15}/> Article published.</span>:<span>Published articles appear on the public Blog.</span>}<button className="primary-cta compact-cta" disabled={publishingBlog||!blogTitle.trim()||!blogExcerpt.trim()||!blogContent.trim()}>{publishingBlog?"Saving…":editingBlogId?"Save article":"Publish article"} <ArrowRight size={16}/></button></div></form><div className="blog-admin-history"><div className="blog-admin-history-head"><span className="card-kicker">PUBLISHED</span><strong>{blogPosts.length} article{blogPosts.length===1?"":"s"}</strong></div>{blogPosts.slice(0,20).map(post=><div className="blog-admin-row" key={post.id||post.slug}><span className="blog-admin-dot"></span><div className="blog-admin-row-copy"><strong>{post.title}</strong><small>{post.category||"Insights"} · {post.published_at?new Date(post.published_at).toLocaleDateString():"Local draft"}</small></div><div className="admin-row-actions"><button className="ghost-small" onClick={()=>startEditBlog(post)}><PenLine size={14}/> Edit</button><button className="danger-small" onClick={()=>deleteBlog(post.id)}><Trash2 size={14}/> Delete</button></div></div>)}</div>
            </section>
 
           <section className="admin-panel admin-gallery-panel">
@@ -3743,7 +3877,7 @@ function ProfilePage({ session, profile, setProfile, theme, toggleTheme, onBack,
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
-  const [broadcastEditorRef, setBroadcastEditorRef] = useState(null);
+
   const [broadcastFile, setBroadcastFile] = useState(null);
   const [broadcastHtml, setBroadcastHtml] = useState("");
   const [uploadingBroadcastFile, setUploadingBroadcastFile] = useState(false);
