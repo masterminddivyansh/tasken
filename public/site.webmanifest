@@ -1,0 +1,17 @@
+{
+  "name": "TRACKEN WORKSPACE",
+  "short_name": "TRACKEN",
+  "description": "TRACKEN WORKSPACE \u2014 personal tracking for study, tasks, habits, focus, goals and finance.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f8fc",
+  "theme_color": "#f7f8fc",
+  "icons": [
+    {
+      "src": "/tracken-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -12766,3 +12766,15 @@ button { -webkit-tap-highlight-color: transparent; }
   .home-faq-item>p{margin:0 27px 19px 39px;font-size:12px;line-height:1.7;}
   .seo-error-main{min-height:calc(100vh - 62px);padding:36px 20px;}
 }
+
+/* TRACKEN v12 — official workspace logo */
+.landing-brand{display:inline-flex;align-items:center;gap:10px}
+.landing-brand-logo{width:34px;height:34px;display:block;flex:0 0 34px;border-radius:10px;object-fit:cover}
+.landing-brand-wordmark{display:block;text-align:left}
+@media(max-width:420px){.landing-brand{gap:7px}.landing-brand-logo{width:28px;height:28px;flex-basis:28px;border-radius:8px}}
+
+/* v13 branding: the supplied black logo remains crisp on light surfaces and
+   automatically inverts on dark public UI so it stays visible in both themes. */
+[data-theme="dark"] .landing-brand-logo {
+  filter: invert(1);
+}

@@ -833,8 +833,9 @@ function PublicHeader({ theme, toggleTheme, onLogin, onRegister, onBlog, onConta
 
   return (
     <header className="landing-nav landing-nav-v3 landing-nav-v4 public-shared-header">
-      <button className="landing-brand" onClick={() => { setMobileNavOpen(false); onNavigate?.("home"); window.scrollTo({ top: 0, behavior: "smooth" }); }} aria-label="TRACKEN home">
-        TRACKEN<span>.</span><small>PERSONAL PROGRESS OS</small>
+      <button className="landing-brand" onClick={() => { setMobileNavOpen(false); onNavigate?.("home"); window.scrollTo({ top: 0, behavior: "smooth" }); }} aria-label="TRACKEN WORKSPACE home">
+        <img className="landing-brand-logo" src="/tracken-logo.png" alt="" aria-hidden="true" />
+        <span className="landing-brand-wordmark">TRACKEN<span>.</span><small>PERSONAL PROGRESS OS</small></span>
       </button>
       <nav className={`landing-nav-links ${mobileNavOpen ? "is-open" : ""}`} aria-label="Primary navigation">
         <button onClick={() => goHomeSection("features")}>Features</button>
